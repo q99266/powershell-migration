@@ -43,6 +43,7 @@ function Test-ScriptSyntax {
 
 if ($TestSyntax) {
     $syntaxFiles = @(
+        (Join-Path $ScriptRoot 'setup-all.ps1'),
         (Join-Path $ScriptRoot 'migrate.ps1'),
         (Join-Path $ScriptRoot 'config.ps1'),
         (Join-Path $ScriptRoot 'restore.ps1'),

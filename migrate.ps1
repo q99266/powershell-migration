@@ -48,6 +48,7 @@ if (-not (Test-Path -LiteralPath $RestoreScript)) {
 }
 
 $syntaxFiles = @(
+    (Join-Path $ScriptRoot 'setup-all.ps1'),
     (Join-Path $ScriptRoot 'migrate.ps1'),
     (Join-Path $ScriptRoot 'config.ps1'),
     $RestoreScript,

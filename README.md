@@ -2,13 +2,88 @@
 
 这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；基础美化脚本已随仓库放在 `terminal-setup/`，只有新电脑沿用同一套目录布局和资产位置时，通常才不需要先改 `config.ps1`。
 
-总入口只有一个：
+一键入口：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
+```
+
+如果新电脑还没有 PowerShell 7，先用 Windows PowerShell 跑同一个一键脚本，它会只做 PowerShell 7 bootstrap，然后提示你重开 `pwsh` 再跑：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
+```
+
+分阶段入口：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
 ```
 
-`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移只跑 `migrate.ps1`；`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考。
+`setup-all.ps1` 会按固定顺序调用 `migrate.ps1`。`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移优先跑 `setup-all.ps1`；需要单独补某一步时再跑 `migrate.ps1`。`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考。
+
+## 最短执行顺序
+
+新电脑从零开始时，按这个顺序跑，别跳着来：
+
+0. 先确认 `config.ps1`。
+   沿用默认 `D:\tools`、`D:\work`、`D:\codexwork` 和主题路径时通常不用改；路径不同先改配置。
+
+1. 如果想全自动串流程，优先跑一键脚本：
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
+   ```
+   如果已经在 PowerShell 7 里：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
+   ```
+
+下面是同一流程的手动分阶段版本。
+
+2. 如果还没有 PowerShell 7，用 Windows PowerShell 跑 bootstrap：
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
+   ```
+   这一步只负责安装 PowerShell 7。脚本提示停止后，关闭旧窗口，打开新的 PowerShell 7。
+
+3. 进入 PowerShell 7 后，先跑 bundled 基础美化：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -RunTerminalSetup
+   ```
+   这个脚本是交互式的。字体那一步推荐选择跳过，后面用主脚本安装字体。
+
+4. 跑一次 dry-run 审计：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
+   ```
+
+5. 安装缺失工具：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
+   ```
+   如果输出提示某些新装命令当前进程仍不可见，重开 PowerShell 7 后再跑一次 dry-run。
+
+6. 设置 Windows Terminal 默认 PowerShell 7：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -SetWindowsTerminalDefaultPwsh
+   ```
+   如果提示 PowerShell 7 动态 profile 还没生成，先打开一次 Windows Terminal，再回来跑这一条。
+
+7. 安装 Nerd Font 并写入 Windows Terminal 字体：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont
+   ```
+
+8. 持久化 PATH、Git 和 profile 增量：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -FixPath
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -ApplyGitConfig
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -ShowProfileSnippet
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -AppendProfileSnippet
+   ```
+
+9. 关闭所有终端，重新打开 Windows Terminal，按 `docs/acceptance.md` 验收。
 
 ## 职责边界
 
@@ -34,7 +109,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 - Nerd Font 下载、当前用户安装、Windows Terminal 默认字体设置
 - profile 追加片段，默认不覆盖已有 profile
 
-## 推荐顺序
+## 详细顺序
 
 0. 先快速扫一眼 `config.ps1`。如果你沿用本项目的完整默认布局，通常可以不改；如果新电脑没有 D 盘、工具目录不同、PowerShell 主题文件不在默认位置，先改配置再跑。
 1. 新电脑先跑语法自检：
