@@ -29,6 +29,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 - Git delta 全局配置
 - Python 运行时检查
 - Java 运行时只审计，不自动迁移
+- Nerd Font 下载、当前用户安装、Windows Terminal 默认字体设置
 - profile 追加片段，默认不覆盖已有 profile
 
 ## 推荐顺序
@@ -43,18 +44,22 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
    powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
    ```
-   该流程会把 `Microsoft.PowerShell` 作为 winget 候选包；安装完成后重新打开 PowerShell 7。
+   该流程只做 bootstrap：安装 `Microsoft.PowerShell` 后会停止后续阶段。安装完成后必须重新打开 PowerShell 7，再继续执行本脚本。
 2. 先运行 `terminal-setup` 完成基础美化。
 3. 运行 `restore.ps1` 做 dry-run 审计。
 4. 如果 Windows Terminal 默认 profile 不是 PowerShell 7，确认后运行：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -SetWindowsTerminalDefaultPwsh
    ```
-5. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
-6. 确认缺失工具后运行 `restore.ps1 -Install`。
-7. 运行 `restore.ps1 -ApplyGitConfig`。
-8. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
-9. 关闭所有终端，重新打开 Windows Terminal 验收。
+5. 安装 Nerd Font 并设置 Windows Terminal 默认字体：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -InstallNerdFont -SetWindowsTerminalFont
+   ```
+6. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
+7. 确认缺失工具后运行 `restore.ps1 -Install`。
+8. 运行 `restore.ps1 -ApplyGitConfig`。
+9. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
+10. 关闭所有终端，重新打开 Windows Terminal 验收。
 
 ## 迁移边界
 
@@ -63,6 +68,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
 
 Windows Terminal 默认 shell 当前有显式审计和可选修复能力：默认只报告，只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并修改 Windows Terminal `settings.json` 的 `defaultProfile`。
+
+PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`restore.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
+
+下载源策略：
+
+- `winget` 使用 `config.ps1` 中的 `WingetSource`，默认是官方 `winget` 源。本项目不伪造 winget 国内镜像；安装失败会按 `NetworkRetryCount` 重试。
+- npm 全局包内置 registry fallback：默认先走当前 npm 配置，失败再走 `https://registry.npmmirror.com`；传入 `-UseChinaMirrors` 时优先走 npmmirror，再回退到当前 npm 配置。
+- PowerShell 模块安装固定使用 `PowerShellGallery` 配置项，脚本会先尝试信任该仓库，安装失败会按 `NetworkRetryCount` 重试。
+- Nerd Font 内置多个下载候选：GitHub release 和若干 GitHub 加速代理。默认会自动逐个尝试；`-UseChinaMirrors` 只是把加速源排到前面。
+- PowerShell Gallery 暂不自动切换镜像；模块安装失败时需要人工处理网络或 PSGallery 信任/代理。
 
 ## 新电脑语法报错处理
 
@@ -82,6 +97,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migr
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
+```
+
+安装完成后打开新的 PowerShell 7：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1
+```
+
+国内 npm 网络较慢时：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install -UseChinaMirrors
+```
+
+国内 GitHub 字体下载较慢时，脚本会自动尝试内置加速源；你也可以显式让加速源优先：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -InstallNerdFont -SetWindowsTerminalFont -UseChinaMirrors
 ```
 
 常见原因：
@@ -105,6 +138,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migr
 推荐字体：`CaskaydiaCove Nerd Font`。
 
 `oh-my-posh`、`Terminal-Icons` 和 prompt 图标依赖 Nerd Font。字体没配好时，图标异常不算恢复成功。
+
+字体安装是当前用户级操作：脚本会下载 `CaskaydiaCove.zip`，解压 `.ttf/.otf` 到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`，写入 `HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts`，然后可选修改 Windows Terminal `profiles.defaults.font.face`。
 
 ## 验收
 

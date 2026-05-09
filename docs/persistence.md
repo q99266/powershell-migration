@@ -34,3 +34,30 @@ D:\codexwork\powershell-migration\backups
 ## PowerShell 模块
 
 模块使用 `Install-Module -Scope CurrentUser` 安装，属于当前用户持久化安装。
+
+## 下载源
+
+- `winget` 使用 `config.ps1` 中的 `WingetSource`，并按 `NetworkRetryCount` 重试；winget 没有在本项目中配置伪国内镜像。
+- npm 安装使用脚本内置 registry fallback。默认先使用当前 npm 配置，失败后尝试 `https://registry.npmmirror.com`；传入 `-UseChinaMirrors` 时优先尝试 npmmirror，再回退当前 npm 配置。
+- PowerShell 模块安装会使用 `PowerShellGallery` 配置项，先尝试把仓库设为 trusted，失败后按 `NetworkRetryCount` 重试。
+- Nerd Font 下载内置多个 URL 候选。默认先尝试 GitHub release，失败后自动尝试加速代理；传入 `-UseChinaMirrors` 时优先尝试加速代理。
+- PowerShell Gallery 没有在脚本中自动替换为镜像源；网络失败时应手工处理 PSGallery、代理或离线安装。
+
+## 字体
+
+`restore.ps1 -InstallNerdFont` 是当前用户级安装：
+
+- 字体文件复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
+- 字体注册写入 `HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts`
+
+`restore.ps1 -SetWindowsTerminalFont` 会备份 Windows Terminal `settings.json`，然后设置：
+
+```json
+"profiles": {
+  "defaults": {
+    "font": {
+      "face": "CaskaydiaCove Nerd Font"
+    }
+  }
+}
+```

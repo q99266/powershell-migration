@@ -6,7 +6,10 @@ param(
     [switch]$ShowProfileSnippet,
     [switch]$RunTerminalSetup,
     [switch]$SetWindowsTerminalDefaultPwsh,
+    [switch]$InstallNerdFont,
+    [switch]$SetWindowsTerminalFont,
     [switch]$AcceptProfileCommandOverrides,
+    [switch]$UseChinaMirrors,
     [switch]$TestSyntax
 )
 
@@ -129,6 +132,283 @@ function Invoke-Native {
         Add-Summary Failed "$Label failed: $($_.Exception.Message)"
         return $false
     }
+}
+
+function Get-WingetInstallArguments {
+    param([string]$Id)
+
+    $args = @(
+        'install',
+        '--id', $Id,
+        '--accept-package-agreements',
+        '--accept-source-agreements'
+    )
+    $source = $MigrationConfig.WingetSource
+    if ([string]::IsNullOrWhiteSpace($source)) {
+        return $args
+    }
+    return @($args + @('--source', $source))
+}
+
+function Get-NerdFontDownloadUrls {
+    $urls = @()
+    if ($UseChinaMirrors -and $MigrationConfig.NerdFontChinaMirrorUrls) {
+        $urls += @($MigrationConfig.NerdFontChinaMirrorUrls)
+    } else {
+        $urls += @($MigrationConfig.NerdFontDownloadUrls)
+    }
+    return @($urls | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+
+function Invoke-DownloadWithFallback {
+    param(
+        [string[]]$Urls,
+        [string]$OutFile
+    )
+
+    if (-not $Urls -or $Urls.Count -eq 0) {
+        Write-Host '[WARN] No download URLs configured.' -ForegroundColor Yellow
+        return $false
+    }
+
+    $timeoutSec = 90
+    if ($MigrationConfig.DownloadTimeoutSec) {
+        $timeoutSec = [int]$MigrationConfig.DownloadTimeoutSec
+    }
+
+    $lastError = $null
+    foreach ($url in $Urls) {
+        Write-Host "[RUN] Download: $url" -ForegroundColor Yellow
+        try {
+            if (Test-Path -LiteralPath $OutFile) {
+                Remove-Item -LiteralPath $OutFile -Force
+            }
+            Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing -TimeoutSec $timeoutSec -ErrorAction Stop
+            if ((Test-Path -LiteralPath $OutFile) -and ((Get-Item -LiteralPath $OutFile).Length -gt 0)) {
+                Write-Host "[OK] Downloaded: $url"
+                return $true
+            }
+            $lastError = 'Downloaded file is missing or empty'
+        } catch {
+            $lastError = $_.Exception.Message
+            Write-Host "[WARN] Download failed: $lastError" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "[WARN] All download URLs failed. Last error: $lastError" -ForegroundColor Yellow
+    return $false
+}
+
+function Test-FontInstalled {
+    param([string]$FontName)
+
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+        $families = [System.Drawing.Text.InstalledFontCollection]::new().Families
+        return [bool]($families | Where-Object { $_.Name -eq $FontName } | Select-Object -First 1)
+    } catch {
+        Write-Host "[WARN] Failed to inspect installed fonts: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+function Install-NerdFont {
+    $fontName = $MigrationConfig.NerdFontName
+    if (Test-FontInstalled -FontName $fontName) {
+        Write-Host "[OK] Nerd Font already installed: $fontName"
+        Add-Summary Ok "Nerd Font installed: $fontName"
+        return
+    }
+
+    if (-not $InstallNerdFont) {
+        Write-Host "[MISS] Nerd Font not installed: $fontName" -ForegroundColor Yellow
+        Write-Host 'Run with -InstallNerdFont to download and install it for current user.'
+        Add-Summary Missing "Nerd Font $fontName"
+        return
+    }
+
+    $urls = Get-NerdFontDownloadUrls
+    $zipPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.NerdFontDownloadPath)
+    $extractPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.NerdFontExtractPath)
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zipPath) | Out-Null
+    New-Item -ItemType Directory -Force -Path $extractPath | Out-Null
+
+    try {
+        Write-Host "[INFO] Using built-in Nerd Font download sources: $($urls.Count)"
+        if (-not (Invoke-DownloadWithFallback -Urls $urls -OutFile $zipPath)) {
+            Add-Summary Failed 'Nerd Font download failed from all built-in sources'
+            return
+        }
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
+    } catch {
+        Write-Host "[WARN] Nerd Font download/extract failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Summary Failed "Nerd Font download/extract failed: $($_.Exception.Message)"
+        return
+    }
+
+    $fontFiles = Get-ChildItem -LiteralPath $extractPath -Recurse -File |
+        Where-Object { $_.Extension -in @('.ttf','.otf') -and $_.Name -match 'CaskaydiaCove|NerdFont|Nerd Font' }
+    if (-not $fontFiles) {
+        Write-Host '[WARN] No Nerd Font .ttf/.otf files found after extraction.' -ForegroundColor Yellow
+        Add-Summary Failed 'No Nerd Font files found after extraction'
+        return
+    }
+
+    $fontsDir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+    New-Item -ItemType Directory -Force -Path $fontsDir | Out-Null
+    foreach ($font in $fontFiles) {
+        $target = Join-Path $fontsDir $font.Name
+        Copy-Item -LiteralPath $font.FullName -Destination $target -Force
+        $regName = $font.BaseName + ' (TrueType)'
+        New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts' -Name $regName -Value $target -PropertyType String -Force | Out-Null
+    }
+
+    Write-Host "[OK] Installed Nerd Font files for current user: $($fontFiles.Count)"
+    Add-Summary Changed "Installed Nerd Font files: $($fontFiles.Count)"
+}
+
+function Set-WindowsTerminalDefaultFont {
+    $state = Get-WindowsTerminalState
+    if (-not $state.Found) {
+        Write-Host "[WARN] Cannot update Windows Terminal font: $($state.Error)" -ForegroundColor Yellow
+        Add-Summary Manual "Windows Terminal font not updated: $($state.Error)"
+        return
+    }
+
+    if (-not $SetWindowsTerminalFont) {
+        Write-Host "Run with -SetWindowsTerminalFont to set Windows Terminal default font to $($MigrationConfig.NerdFontName)."
+        return
+    }
+
+    if ((-not $InstallNerdFont) -and (-not (Test-FontInstalled -FontName $MigrationConfig.NerdFontName))) {
+        Write-Host "[WARN] Refusing to set Windows Terminal font because it is not installed: $($MigrationConfig.NerdFontName)" -ForegroundColor Yellow
+        Write-Host 'Run with -InstallNerdFont -SetWindowsTerminalFont to download, install, and apply it in one pass.'
+        Add-Summary Manual "Install Nerd Font before setting Windows Terminal font: $($MigrationConfig.NerdFontName)"
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $MigrationConfig.BackupRoot | Out-Null
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backupFile = Join-Path $MigrationConfig.BackupRoot "windows-terminal-settings-font-$stamp.json"
+    Copy-Item -LiteralPath $state.Path -Destination $backupFile -Force
+
+    $settings = Get-Content -LiteralPath $state.Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $settings.profiles) {
+        $settings | Add-Member -MemberType NoteProperty -Name profiles -Value ([pscustomobject]@{}) -Force
+    }
+    if (-not $settings.profiles.defaults) {
+        $settings.profiles | Add-Member -MemberType NoteProperty -Name defaults -Value ([pscustomobject]@{}) -Force
+    }
+    if (-not $settings.profiles.defaults.font) {
+        $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name font -Value ([pscustomobject]@{}) -Force
+    }
+    $settings.profiles.defaults.font | Add-Member -MemberType NoteProperty -Name face -Value $MigrationConfig.NerdFontName -Force
+    $settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $state.Path -Encoding utf8
+    Write-Host "[OK] Windows Terminal default font set to $($MigrationConfig.NerdFontName). Backup: $backupFile" -ForegroundColor Green
+    Add-Summary Changed "Windows Terminal default font set: $($MigrationConfig.NerdFontName)"
+}
+
+function Get-NpmInstallArguments {
+    param([string]$Package)
+
+    $argumentSets = @()
+    $defaultArgs = @('install','-g',$Package)
+    $configuredArgs = $defaultArgs
+    if (-not [string]::IsNullOrWhiteSpace($MigrationConfig.NpmRegistry)) {
+        $configuredArgs = @('install','-g',$Package,'--registry',$MigrationConfig.NpmRegistry)
+    }
+    $mirrorArgs = $null
+    if (-not [string]::IsNullOrWhiteSpace($MigrationConfig.NpmChinaMirror)) {
+        $mirrorArgs = @('install','-g',$Package,'--registry',$MigrationConfig.NpmChinaMirror)
+    }
+
+    if ($UseChinaMirrors) {
+        if ($mirrorArgs) { $argumentSets += ,$mirrorArgs }
+        $argumentSets += ,$configuredArgs
+    } else {
+        $argumentSets += ,$configuredArgs
+        if ($mirrorArgs) { $argumentSets += ,$mirrorArgs }
+    }
+
+    return $argumentSets
+}
+
+function Invoke-NativeWithRetry {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$Label,
+        [switch]$ShouldRun,
+        [int]$RetryCount = 1
+    )
+
+    if (-not $ShouldRun) {
+        return (Invoke-Native -FilePath $FilePath -Arguments $Arguments -Label $Label -ShouldRun:$false)
+    }
+
+    $attempts = [Math]::Max(1, $RetryCount)
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        $attemptLabel = $Label
+        if ($attempts -gt 1) {
+            $attemptLabel = "$Label (attempt $attempt/$attempts)"
+        }
+        if (Invoke-Native -FilePath $FilePath -Arguments $Arguments -Label $attemptLabel -ShouldRun:$true) {
+            return $true
+        }
+        if ($attempt -lt $attempts) {
+            Start-Sleep -Seconds 2
+        }
+    }
+    return $false
+}
+
+function Invoke-NativeWithFallback {
+    param(
+        [string]$FilePath,
+        [object[]]$ArgumentSets,
+        [string]$Label,
+        [switch]$ShouldRun,
+        [int]$RetryCount = 1
+    )
+
+    if (-not $ArgumentSets -or $ArgumentSets.Count -eq 0) {
+        Write-Host "[WARN] No command candidates configured for $Label" -ForegroundColor Yellow
+        Add-Summary Failed "No command candidates configured for $Label"
+        return $false
+    }
+
+    if (-not $ShouldRun) {
+        Write-Host "[TODO] $Label" -ForegroundColor Yellow
+        foreach ($arguments in $ArgumentSets) {
+            Write-Host "      $FilePath $($arguments -join ' ')"
+        }
+        return $true
+    }
+
+    foreach ($arguments in $ArgumentSets) {
+        if (Invoke-NativeWithRetry -FilePath $FilePath -Arguments ([string[]]$arguments) -Label $Label -ShouldRun:$true -RetryCount $RetryCount) {
+            return $true
+        }
+        Write-Host "[WARN] Candidate failed, trying next fallback for $Label" -ForegroundColor Yellow
+    }
+    Add-Summary Failed "$Label failed across all fallback candidates"
+    return $false
+}
+
+function Get-PowerShellModuleInstallArguments {
+    param([string]$Name)
+
+    $gallery = $MigrationConfig.PowerShellGallery
+    if ([string]::IsNullOrWhiteSpace($gallery)) {
+        $gallery = 'PSGallery'
+    }
+    $command = @"
+`$ErrorActionPreference = 'Stop'
+`$ProgressPreference = 'SilentlyContinue'
+Set-PSRepository -Name '$gallery' -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+Install-Module -Name '$Name' -Repository '$gallery' -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+"@
+    return @('-NoProfile','-Command',$command)
 }
 
 function Test-ModuleAvailableCompat {
@@ -450,8 +730,18 @@ Write-Host "FixPath: $FixPath"
 Write-Host "ApplyGitConfig: $ApplyGitConfig"
 Write-Host "AppendProfileSnippet: $AppendProfileSnippet"
 Write-Host "SetWindowsTerminalDefaultPwsh: $SetWindowsTerminalDefaultPwsh"
+Write-Host "InstallNerdFont: $InstallNerdFont"
+Write-Host "SetWindowsTerminalFont: $SetWindowsTerminalFont"
+Write-Host "UseChinaMirrors: $UseChinaMirrors"
 Write-Host 'Default mode audits only.'
 Write-Host 'Run with -TestSyntax first on a new machine if profile/script parsing looks suspicious.'
+if ($UseChinaMirrors) {
+    Write-Host "NPM registry override: $($MigrationConfig.NpmChinaMirror)"
+    Write-Host 'NPM install fallback order: npmmirror first, then configured/default registry.'
+    Write-Host 'Winget source is still the configured winget source; winget has no project-managed domestic mirror here.'
+} else {
+    Write-Host 'NPM install fallback order: configured/default registry first, then npmmirror.'
+}
 
 Write-Section 'Official entry'
 Write-Host 'Formal script: restore.ps1'
@@ -474,17 +764,32 @@ if (Test-Path -LiteralPath $MigrationConfig.TerminalSetupMain) {
 
 Write-Section 'PowerShell 7 baseline'
 $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+$requiresPwshRerun = $false
 if ($pwshCommand) {
     Write-Host "[OK] pwsh -> $($pwshCommand.Source)"
     Add-Summary Ok "pwsh -> $($pwshCommand.Source)"
 } else {
     Write-Host '[MISS] pwsh' -ForegroundColor Yellow
     Add-Summary Missing 'pwsh'
-    [void](Invoke-Native -FilePath 'winget' -Arguments @('install','--id','Microsoft.PowerShell','--source','winget') -Label 'Install PowerShell 7' -ShouldRun:$Install)
+    [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id 'Microsoft.PowerShell') -Label 'Install PowerShell 7' -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
+    $requiresPwshRerun = $true
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host '[WARN] Current host is not PowerShell 7. Install PowerShell 7, then rerun with pwsh.' -ForegroundColor Yellow
     Add-Summary Manual "Current host is PowerShell $($PSVersionTable.PSVersion), not PowerShell 7"
+    $requiresPwshRerun = $true
+}
+if ($Install -and $requiresPwshRerun) {
+    Write-Host '[STOP] Bootstrap phase complete or required. Open a new PowerShell 7 (pwsh) session and rerun restore.ps1 for modules/profile/tools.' -ForegroundColor Yellow
+    Add-Summary Manual 'Rerun from a new PowerShell 7 session before continuing'
+    Write-Section 'Summary'
+    foreach ($kind in $script:Summary.Keys) {
+        Write-Host "[$kind] $($script:Summary[$kind].Count)"
+        foreach ($item in $script:Summary[$kind]) {
+            Write-Host "  - $item"
+        }
+    }
+    return
 }
 
 Write-Section 'Windows Terminal default shell'
@@ -535,7 +840,7 @@ foreach ($pkg in $MigrationConfig.WingetPackages) {
         Write-Host "[OK] $($pkg.Command)"
         Add-Summary Ok "winget command present: $($pkg.Command)"
     } else {
-        [void](Invoke-Native -FilePath 'winget' -Arguments @('install','--id',$pkg.Id,'--source','winget') -Label "Install $($pkg.Id)" -ShouldRun:$Install)
+        [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $pkg.Id) -Label "Install $($pkg.Id)" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
         if (-not $Install) { Add-Summary Missing "winget package candidate: $($pkg.Id)" }
     }
 }
@@ -547,7 +852,7 @@ foreach ($module in $MigrationConfig.PowerShellModules) {
         Write-Host "[OK] module $($module.Name) -> $($state.Path)"
         Add-Summary Ok "module $($module.Name)"
     } else {
-        [void](Invoke-Native -FilePath 'pwsh' -Arguments @('-NoProfile','-Command',"Install-Module $($module.Name) -Scope CurrentUser -Force -AllowClobber") -Label "Install module $($module.Name)" -ShouldRun:$Install)
+        [void](Invoke-NativeWithRetry -FilePath 'pwsh' -Arguments (Get-PowerShellModuleInstallArguments -Name $module.Name) -Label "Install module $($module.Name)" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
         if (-not $Install) { Add-Summary Missing "module $($module.Name)" }
     }
 }
@@ -566,7 +871,7 @@ if (Test-CommandExists npm) {
                 Write-Host "[OK] npm global package $pkg@$($npmGlobal[$pkg])"
                 Add-Summary Ok "npm global package $pkg"
             } else {
-                [void](Invoke-Native -FilePath 'npm' -Arguments @('install','-g',$pkg) -Label "Install missing npm global package $pkg" -ShouldRun:$Install)
+                [void](Invoke-NativeWithFallback -FilePath 'npm' -ArgumentSets (Get-NpmInstallArguments -Package $pkg) -Label "Install missing npm global package $pkg" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
                 if (-not $Install) { Add-Summary Missing "npm global package $pkg" }
             }
         }
@@ -648,6 +953,8 @@ if ($AppendProfileSnippet) {
 Write-Section 'Terminal style acceptance'
 Write-Host "Recommended Nerd Font: $($MigrationConfig.RecommendedNerdFont)"
 Write-Host "Theme path: $($MigrationConfig.ThemePath)"
+Install-NerdFont
+Set-WindowsTerminalDefaultFont
 if (Test-Path -LiteralPath $MigrationConfig.ThemePath) {
     Write-Host '[OK] minimal.omp.json exists'
     Add-Summary Ok 'minimal.omp.json exists'

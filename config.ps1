@@ -15,6 +15,11 @@ $MigrationConfig = @{
     TerminalSetupLegacy = 'D:\tools\terminal-setup-master\terminal-setup-master\setup-terminal-cn.ps1'
     WindowsTerminalSettingsPath = 'C:\Users\DP\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
     WindowsTerminalPwshProfileNamePattern = '^PowerShell 7$'
+    WingetSource = 'winget'
+    NpmRegistry = $null
+    NpmChinaMirror = 'https://registry.npmmirror.com'
+    PowerShellGallery = 'PSGallery'
+    NetworkRetryCount = 2
 
     CliBinPath = 'D:\tools\cli-bin'
     FzfPath = 'D:\tools\fzf'
@@ -34,6 +39,24 @@ $MigrationConfig = @{
 
     ThemePath = 'C:\Users\DP\Documents\PowerShell\themes\minimal.omp.json'
     RecommendedNerdFont = 'CaskaydiaCove Nerd Font'
+    NerdFontName = 'CaskaydiaCove Nerd Font'
+    NerdFontAssetName = 'CaskaydiaCove.zip'
+    NerdFontVersion = 'v3.4.0'
+    NerdFontDownloadUrls = @(
+        'https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://ghfast.top/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://gh-proxy.com/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://mirror.ghproxy.com/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip'
+    )
+    NerdFontChinaMirrorUrls = @(
+        'https://ghfast.top/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://gh-proxy.com/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://mirror.ghproxy.com/https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip',
+        'https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/CaskaydiaCove.zip'
+    )
+    NerdFontDownloadPath = 'D:\codexwork\powershell-migration\downloads\CaskaydiaCove.zip'
+    NerdFontExtractPath = 'D:\codexwork\powershell-migration\downloads\CaskaydiaCove'
+    DownloadTimeoutSec = 90
 
     PreferredPathFirst = @(
         'D:\tools\cli-bin',
@@ -55,7 +78,6 @@ $MigrationConfig = @{
     )
 
     WingetPackages = @(
-        @{ Id = 'Microsoft.PowerShell'; Command = 'pwsh'; Owner = 'base' },
         @{ Id = 'Git.Git'; Command = 'git'; Owner = 'migration' },
         @{ Id = 'GitHub.cli'; Command = 'gh'; Owner = 'migration' },
         @{ Id = 'junegunn.fzf'; Command = 'fzf'; Owner = 'migration' },
