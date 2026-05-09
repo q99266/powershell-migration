@@ -27,8 +27,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 - `bat` / `fd` / `rg` / `jq` / `delta` / `lazygit` / `zoxide` / `es.exe`
 - npm 全局 CLI（先检测，缺失才安装，避免无差别升级）
 - Git delta 全局配置
-- Python 运行时检查
-- Java 运行时只审计，不自动迁移
+- nvm-windows / pyenv-win / JEnv for Windows 版本管理器安装与 PATH 规划
+- Python 运行时检查，不强行安装具体 Python 版本
+- Java 运行时检查，不强行切换具体 JDK 版本
 - Windows Terminal 安装检测、最小 settings 初始化、默认 PowerShell 7 profile 设置
 - Nerd Font 下载、当前用户安装、Windows Terminal 默认字体设置
 - profile 追加片段，默认不覆盖已有 profile
@@ -66,7 +67,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 本项目不是通用装机脚本。它默认按作者的 D 盘布局恢复环境；`config.ps1` 是可选配置入口，不是每次迁移前都必须改。
 
-Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
+Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`javac` 的解析状态；脚本不会强行设置 `JAVA_HOME`，也不会切换具体 JDK 版本。
+
+运行时版本管理器会自动安装/配置到 D 盘默认布局：
+
+- `nvm-windows`：`D:\tools\nvm`，Node symlink 为 `D:\tools\nodejs`，默认启用 `24.14.1`。
+- `pyenv-win`：`D:\tools\pyenv\pyenv-win`。
+- `JEnv for Windows`：`D:\tools\jenv`。
+
+脚本负责安装管理器和 PATH/env 基础配置；Python 具体版本、Java 具体 JDK 版本仍以审计和提示为主，不在迁移时强行切换。
 
 Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7，并预写 Nerd Font 默认字体。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
 
@@ -76,6 +85,8 @@ PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，
 
 - `winget` 使用 `config.ps1` 中的 `WingetSource`，默认是官方 `winget` 源。本项目不伪造 winget 国内镜像；安装失败会按 `NetworkRetryCount` 重试。
 - Windows Terminal 通过 winget 包 `Microsoft.WindowsTerminal` 安装；安装后当前进程如果还看不到 `wt`，重开 Windows Terminal / PowerShell 7 后继续跑脚本。
+- nvm-windows 通过 winget 包 `CoreyButler.NVMforWindows` 安装，并修正 `NVM_HOME` / `NVM_SYMLINK` 到 D 盘布局。
+- pyenv-win 与 JEnv for Windows 使用脚本内置 GitHub ZIP 下载源和加速代理 fallback。
 - npm 全局包内置 registry fallback：默认先走当前 npm 配置，失败再走 `https://registry.npmmirror.com`；传入 `-UseChinaMirrors` 时优先走 npmmirror，再回退到当前 npm 配置。
 - PowerShell 模块安装固定使用 `PowerShellGallery` 配置项，脚本会先尝试信任该仓库，安装失败会按 `NetworkRetryCount` 重试。
 - Nerd Font 内置多个下载候选：GitHub release 和若干 GitHub 加速代理。默认会自动逐个尝试；`-UseChinaMirrors` 只是把加速源排到前面。
@@ -126,6 +137,71 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 - PowerShell 版本过旧。
 - 从网页/聊天复制脚本时混入不可见字符。
 - 执行策略阻止脚本加载。
+
+## 版本管理器用法
+
+本项目默认安装三套运行时版本管理器：
+
+```text
+nvm-windows: D:\tools\nvm
+Node symlink: D:\tools\nodejs
+pyenv-win:   D:\tools\pyenv\pyenv-win
+JEnv:        D:\tools\jenv
+```
+
+### nvm / Node.js
+
+常用命令：
+
+```powershell
+nvm version
+nvm list
+nvm install 24.14.1
+nvm use 24.14.1
+node -v
+npm -v
+```
+
+本项目默认配置：
+
+```text
+NVM_HOME=D:\tools\nvm
+NVM_SYMLINK=D:\tools\nodejs
+```
+
+新开终端后，`node` 和 `npm` 应该从 `D:\tools\nodejs` 解析。
+
+### pyenv-win / Python
+
+常用命令：
+
+```powershell
+pyenv --version
+pyenv versions
+pyenv install 3.13.13
+pyenv global 3.13.13
+pyenv rehash
+python --version
+pip --version
+```
+
+本项目只安装/配置 `pyenv-win` 和 PATH，不强行安装或切换具体 Python 版本。
+
+### JEnv / Java
+
+常用命令：
+
+```powershell
+jenv list
+jenv add jdk11 D:\tools\jdk11
+jenv add jdk21 D:\tools\jdk21
+jenv change jdk21
+jenv use jdk11
+java -version
+javac -version
+```
+
+`jenv change` 是全局切换，`jenv use` 是当前 shell 临时切换。本项目安装/配置 JEnv 管理器，但不强行切换具体 JDK。
 
 ## 持久化说明
 

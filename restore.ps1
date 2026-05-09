@@ -161,6 +161,21 @@ function Get-NerdFontDownloadUrls {
     return @($urls | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
 }
 
+function Get-OrderedDownloadUrls {
+    param(
+        [string[]]$DefaultUrls,
+        [string[]]$ChinaMirrorUrls
+    )
+
+    $urls = @()
+    if ($UseChinaMirrors -and $ChinaMirrorUrls) {
+        $urls += @($ChinaMirrorUrls)
+    } else {
+        $urls += @($DefaultUrls)
+    }
+    return @($urls | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+
 function Invoke-DownloadWithFallback {
     param(
         [string[]]$Urls,
@@ -198,6 +213,192 @@ function Invoke-DownloadWithFallback {
 
     Write-Host "[WARN] All download URLs failed. Last error: $lastError" -ForegroundColor Yellow
     return $false
+}
+
+function Expand-ZipToDirectory {
+    param(
+        [string]$ZipPath,
+        [string]$ExtractPath,
+        [string]$TargetPath
+    )
+
+    if (Test-Path -LiteralPath $ExtractPath) {
+        Remove-Item -LiteralPath $ExtractPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $ExtractPath | Out-Null
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $ExtractPath -Force
+
+    $root = Get-ChildItem -LiteralPath $ExtractPath -Directory | Select-Object -First 1
+    if (-not $root) {
+        throw "No extracted directory found in $ExtractPath"
+    }
+
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $TargetPath) | Out-Null
+    if (Test-Path -LiteralPath $TargetPath) {
+        Remove-Item -LiteralPath $TargetPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $TargetPath | Out-Null
+    Copy-Item -Path (Join-Path $root.FullName '*') -Destination $TargetPath -Recurse -Force
+}
+
+function Set-CurrentRuntimeManagerEnvironment {
+    if ($MigrationConfig.NvmRoot) { $env:NVM_HOME = $MigrationConfig.NvmRoot }
+    if ($MigrationConfig.NvmSymlink) { $env:NVM_SYMLINK = $MigrationConfig.NvmSymlink }
+
+    $runtimePaths = @(
+        $MigrationConfig.NvmRoot,
+        $MigrationConfig.NvmSymlink,
+        $MigrationConfig.PyenvBinPath,
+        $MigrationConfig.PyenvShimsPath,
+        $MigrationConfig.JenvRoot
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+    [array]::Reverse($runtimePaths)
+    foreach ($path in $runtimePaths) {
+        if ($env:Path -notlike "*$path*") {
+            $env:Path = "$path;$env:Path"
+        }
+    }
+}
+
+function Ensure-NvmBaseline {
+    $nvmExe = Join-Path $MigrationConfig.NvmRoot 'nvm.exe'
+    if (-not (Test-Path -LiteralPath $nvmExe)) {
+        Write-Host "[MISS] nvm -> $nvmExe" -ForegroundColor Yellow
+        Add-Summary Missing 'nvm'
+        if ($Install) {
+            [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments @(
+                'install',
+                '--id', $MigrationConfig.NvmPackageId,
+                '--location', $MigrationConfig.NvmRoot,
+                '--accept-package-agreements',
+                '--accept-source-agreements',
+                '--source', $MigrationConfig.WingetSource
+            ) -Label 'Install nvm-windows' -ShouldRun:$true -RetryCount $MigrationConfig.NetworkRetryCount)
+        } else {
+            Write-Host 'Run with -Install to install nvm-windows.'
+            return
+        }
+    } else {
+        Write-Host "[OK] nvm -> $nvmExe"
+        Add-Summary Ok 'nvm present'
+    }
+
+    if (-not (Test-Path -LiteralPath $nvmExe)) {
+        Write-Host '[WARN] nvm install did not produce nvm.exe yet. Reopen terminal and rerun if winget requested elevation.' -ForegroundColor Yellow
+        Add-Summary Manual 'nvm install pending; rerun after installer completes'
+        return
+    }
+
+    $settingsPath = Join-Path $MigrationConfig.NvmRoot 'settings.txt'
+    $expectedSettings = @(
+        "root: $($MigrationConfig.NvmRoot)",
+        "path: $($MigrationConfig.NvmSymlink)",
+        ''
+    )
+    $currentSettings = $null
+    if (Test-Path -LiteralPath $settingsPath) {
+        $currentSettings = Get-Content -LiteralPath $settingsPath -Raw -ErrorAction SilentlyContinue
+    }
+    $nvmHome = [Environment]::GetEnvironmentVariable('NVM_HOME', 'User')
+    $nvmSymlink = [Environment]::GetEnvironmentVariable('NVM_SYMLINK', 'User')
+    $needsNvmConfig = ($currentSettings -notmatch [regex]::Escape("root: $($MigrationConfig.NvmRoot)")) -or
+        ($currentSettings -notmatch [regex]::Escape("path: $($MigrationConfig.NvmSymlink)")) -or
+        ($nvmHome -ne $MigrationConfig.NvmRoot) -or
+        ($nvmSymlink -ne $MigrationConfig.NvmSymlink)
+
+    if ($needsNvmConfig) {
+        if ($Install) {
+            New-Item -ItemType Directory -Force -Path $MigrationConfig.NvmRoot | Out-Null
+            Set-Content -LiteralPath $settingsPath -Value $expectedSettings -Encoding utf8
+            [Environment]::SetEnvironmentVariable('NVM_HOME', $MigrationConfig.NvmRoot, 'User')
+            [Environment]::SetEnvironmentVariable('NVM_SYMLINK', $MigrationConfig.NvmSymlink, 'User')
+            Add-Summary Changed 'Configured nvm D: drive environment'
+        } else {
+            Write-Host '[WARN] nvm environment/settings differ from config.ps1. Run with -Install to persist the D: drive layout.' -ForegroundColor Yellow
+            Add-Summary Manual 'nvm environment/settings need D: drive layout'
+        }
+    }
+    Set-CurrentRuntimeManagerEnvironment
+
+    $nodeVersion = $MigrationConfig.NvmNodeVersion
+    $nodeVersionDir = Join-Path $MigrationConfig.NvmRoot "v$nodeVersion"
+    if (-not (Test-Path -LiteralPath $nodeVersionDir)) {
+        [void](Invoke-NativeWithRetry -FilePath $nvmExe -Arguments @('install', $nodeVersion) -Label "Install node $nodeVersion via nvm" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
+        if (-not $Install) { Add-Summary Missing "nvm node version $nodeVersion" }
+    }
+    if ($Install) {
+        [void](Invoke-Native -FilePath $nvmExe -Arguments @('use', $nodeVersion) -Label "Use node $nodeVersion via nvm" -ShouldRun:$true)
+        Set-CurrentRuntimeManagerEnvironment
+    } elseif (Test-Path -LiteralPath $nodeVersionDir) {
+        Add-Summary Ok "nvm node version $nodeVersion"
+    }
+}
+
+function Ensure-PyenvBaseline {
+    $pyenvCommand = Join-Path $MigrationConfig.PyenvBinPath 'pyenv.ps1'
+    if (Test-Path -LiteralPath $pyenvCommand) {
+        Write-Host "[OK] pyenv-win -> $($MigrationConfig.PyenvRoot)"
+        Add-Summary Ok 'pyenv-win present'
+        return
+    }
+
+    Write-Host "[MISS] pyenv-win -> $($MigrationConfig.PyenvRoot)" -ForegroundColor Yellow
+    Add-Summary Missing 'pyenv-win'
+    if (-not $Install) {
+        Write-Host 'Run with -Install to download and install pyenv-win.'
+        return
+    }
+
+    $urls = Get-OrderedDownloadUrls -DefaultUrls $MigrationConfig.PyenvDownloadUrls -ChinaMirrorUrls $MigrationConfig.PyenvChinaMirrorUrls
+    $zipPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.PyenvDownloadPath)
+    $extractPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.PyenvExtractPath)
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zipPath) | Out-Null
+    if (-not (Invoke-DownloadWithFallback -Urls $urls -OutFile $zipPath)) {
+        Add-Summary Failed 'pyenv-win download failed from all built-in sources'
+        return
+    }
+    try {
+        Expand-ZipToDirectory -ZipPath $zipPath -ExtractPath $extractPath -TargetPath $MigrationConfig.PyenvProjectRoot
+        Write-Host "[OK] Installed pyenv-win: $($MigrationConfig.PyenvRoot)"
+        Add-Summary Changed 'Installed pyenv-win'
+    } catch {
+        Write-Host "[WARN] pyenv-win install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Summary Failed "pyenv-win install failed: $($_.Exception.Message)"
+    }
+}
+
+function Ensure-JenvBaseline {
+    $jenvBat = Join-Path $MigrationConfig.JenvRoot 'jenv.bat'
+    if (Test-Path -LiteralPath $jenvBat) {
+        Write-Host "[OK] jenv -> $jenvBat"
+        Add-Summary Ok 'jenv present'
+        return
+    }
+
+    Write-Host "[MISS] jenv -> $jenvBat" -ForegroundColor Yellow
+    Add-Summary Missing 'jenv'
+    if (-not $Install) {
+        Write-Host 'Run with -Install to download and install JEnv for Windows.'
+        return
+    }
+
+    $urls = Get-OrderedDownloadUrls -DefaultUrls $MigrationConfig.JenvDownloadUrls -ChinaMirrorUrls $MigrationConfig.JenvChinaMirrorUrls
+    $zipPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.JenvDownloadPath)
+    $extractPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.JenvExtractPath)
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zipPath) | Out-Null
+    if (-not (Invoke-DownloadWithFallback -Urls $urls -OutFile $zipPath)) {
+        Add-Summary Failed 'jenv download failed from all built-in sources'
+        return
+    }
+    try {
+        Expand-ZipToDirectory -ZipPath $zipPath -ExtractPath $extractPath -TargetPath $MigrationConfig.JenvRoot
+        Write-Host "[OK] Installed jenv: $($MigrationConfig.JenvRoot)"
+        Add-Summary Changed 'Installed jenv'
+    } catch {
+        Write-Host "[WARN] jenv install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Summary Failed "jenv install failed: $($_.Exception.Message)"
+    }
 }
 
 function Test-FontInstalled {
@@ -905,6 +1106,12 @@ if ($FixPath) {
     Write-Host 'Run with -FixPath to persist User PATH ordering.'
 }
 
+Write-Section 'Runtime version managers'
+Ensure-NvmBaseline
+Ensure-PyenvBaseline
+Ensure-JenvBaseline
+Set-CurrentRuntimeManagerEnvironment
+
 Write-Section 'Command resolution'
 foreach ($name in $MigrationConfig.AcceptanceCommands) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
@@ -960,7 +1167,7 @@ if (Test-CommandExists npm) {
         }
     }
 } else {
-    Write-Host '[WARN] npm is missing. Install Node.js first.'
+    Write-Host '[WARN] npm is missing. Install/activate Node.js with nvm first.'
     Add-Summary Missing 'npm'
 }
 
@@ -996,7 +1203,7 @@ foreach ($name in @('python','pip','uv','uvx')) {
 }
 
 Write-Section 'Java runtime'
-Write-Host 'Java mode: audit only. This script does not set JAVA_HOME or edit Java PATH.'
+Write-Host 'Java mode: installs/checks JEnv manager, but does not force a specific JDK version.'
 $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')
 if (-not $javaHome) { $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine') }
 Write-Host "JAVA_HOME: $javaHome"

@@ -1,8 +1,35 @@
-# Python / Java 运行时
+# Node / Python / Java 运行时
+
+## Node
+
+当前策略：用 `nvm-windows` 管理 Node，而不是直接安装 `OpenJS.NodeJS`。
+
+默认路径：
+
+```text
+NVM_HOME=D:\tools\nvm
+NVM_SYMLINK=D:\tools\nodejs
+```
+
+默认 Node 版本：
+
+```text
+24.14.1
+```
+
+验收命令：
+
+```powershell
+nvm version
+nvm list
+node -v
+npm -v
+Get-Command nvm,node,npm
+```
 
 ## Python
 
-当前策略：检查 `pyenv-win` 与常用命令解析，不在本轮自动安装 Python 版本。
+当前策略：安装/检查 `pyenv-win` 与常用命令解析，不在迁移脚本里强行安装或切换具体 Python 版本。
 
 验收命令：
 
@@ -23,7 +50,7 @@ Get-Command python,pip,uv,uvx
 
 ## Java
 
-当前能力：只审计，不迁移。
+当前策略：安装/检查 `JEnv for Windows`，但不强行切换具体 JDK 版本。
 
 脚本会检查：
 
@@ -31,10 +58,11 @@ Get-Command python,pip,uv,uvx
 - `java`
 - `javac`
 - `java` 是否命中 `jenv`
+- `jenv` 是否可调用
 
 脚本不会：
 
-- 设置 `JAVA_HOME`
+- 强行设置 `JAVA_HOME`
 - 修改 Java PATH
 - 安装 JDK
 - 切换 Java 版本
@@ -63,4 +91,4 @@ echo $env:JAVA_HOME
 Get-Command java,javac
 ```
 
-`jenv` 暂不作为正式方案。脚本只提示 `java` 是否命中 `jenv`，不会修改它。
+`jenv` 管理器本身会安装到 `D:\tools\jenv`；具体 JDK 仍需要后续用 `jenv add/change/use` 或固定 `JAVA_HOME` 策略处理。

@@ -39,6 +39,9 @@ D:\codexwork\powershell-migration\backups
 
 - `winget` 使用 `config.ps1` 中的 `WingetSource`，并按 `NetworkRetryCount` 重试；winget 没有在本项目中配置伪国内镜像。
 - Windows Terminal 缺失时，`migrate.ps1 -Install` 会通过 winget 安装 `Microsoft.WindowsTerminal`。
+- nvm-windows 通过 winget 安装到 `D:\tools\nvm`，并设置 `NVM_HOME=D:\tools\nvm`、`NVM_SYMLINK=D:\tools\nodejs`。
+- pyenv-win 通过内置 GitHub ZIP 下载源安装到 `D:\tools\pyenv`。
+- JEnv for Windows 通过内置 GitHub ZIP 下载源安装到 `D:\tools\jenv`。
 - npm 安装使用脚本内置 registry fallback。默认先使用当前 npm 配置，失败后尝试 `https://registry.npmmirror.com`；传入 `-UseChinaMirrors` 时优先尝试 npmmirror，再回退当前 npm 配置。
 - PowerShell 模块安装会使用 `PowerShellGallery` 配置项，先尝试把仓库设为 trusted，失败后按 `NetworkRetryCount` 重试。
 - Nerd Font 下载内置多个 URL 候选。默认先尝试 GitHub release，失败后自动尝试加速代理；传入 `-UseChinaMirrors` 时优先尝试加速代理。

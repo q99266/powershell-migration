@@ -25,14 +25,48 @@ $MigrationConfig = @{
 
     CliBinPath = 'D:\tools\cli-bin'
     FzfPath = 'D:\tools\fzf'
+    NvmRoot = 'D:\tools\nvm'
+    NvmSymlink = 'D:\tools\nodejs'
+    NvmNodeVersion = '24.14.1'
+    NvmPackageId = 'CoreyButler.NVMforWindows'
     NodePath = 'D:\tools\nodejs'
     NpmGlobalPath = 'C:\Users\DP\AppData\Roaming\npm'
+    PyenvProjectRoot = 'D:\tools\pyenv'
     PyenvRoot = 'D:\tools\pyenv\pyenv-win'
     PyenvBinPath = 'D:\tools\pyenv\pyenv-win\bin'
     PyenvShimsPath = 'D:\tools\pyenv\pyenv-win\shims'
+    PyenvDownloadUrls = @(
+        'https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://ghfast.top/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://gh-proxy.com/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://mirror.ghproxy.com/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip'
+    )
+    PyenvChinaMirrorUrls = @(
+        'https://ghfast.top/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://gh-proxy.com/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://mirror.ghproxy.com/https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip',
+        'https://github.com/pyenv-win/pyenv-win/archive/refs/heads/master.zip'
+    )
+    PyenvDownloadPath = 'D:\codexwork\powershell-migration\downloads\pyenv-win.zip'
+    PyenvExtractPath = 'D:\codexwork\powershell-migration\downloads\pyenv-win'
 
     JavaHome = $null
     JavaBinPath = $null
+    JenvRoot = 'D:\tools\jenv'
+    JenvDownloadUrls = @(
+        'https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://ghfast.top/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://gh-proxy.com/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://mirror.ghproxy.com/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip'
+    )
+    JenvChinaMirrorUrls = @(
+        'https://ghfast.top/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://gh-proxy.com/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://mirror.ghproxy.com/https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip',
+        'https://github.com/FelixSelter/JEnv-for-Windows/archive/refs/heads/master.zip'
+    )
+    JenvDownloadPath = 'D:\codexwork\powershell-migration\downloads\jenv-windows.zip'
+    JenvExtractPath = 'D:\codexwork\powershell-migration\downloads\jenv-windows'
 
     JadxPath = 'D:\tools\jadx\bin'
     AdbPath = 'D:\tools\adb\platform-tools'
@@ -63,10 +97,12 @@ $MigrationConfig = @{
     PreferredPathFirst = @(
         'D:\tools\cli-bin',
         'D:\tools\fzf',
+        'D:\tools\nvm',
         'D:\tools\nodejs',
         'C:\Users\DP\AppData\Roaming\npm',
         'D:\tools\pyenv\pyenv-win\bin',
-        'D:\tools\pyenv\pyenv-win\shims'
+        'D:\tools\pyenv\pyenv-win\shims',
+        'D:\tools\jenv'
     )
 
     PreferredPathAppend = @(
@@ -90,8 +126,7 @@ $MigrationConfig = @{
         @{ Id = 'dandavison.delta'; Command = 'delta'; Owner = 'migration' },
         @{ Id = 'jesseduffield.lazygit'; Command = 'lazygit'; Owner = 'migration' },
         @{ Id = 'ajeetdsouza.zoxide'; Command = 'zoxide'; Owner = 'migration' },
-        @{ Id = 'voidtools.Everything.Alpha'; Command = $null; Owner = 'migration' },
-        @{ Id = 'OpenJS.NodeJS'; Command = 'node'; Owner = 'runtime' }
+        @{ Id = 'voidtools.Everything.Alpha'; Command = $null; Owner = 'migration' }
     )
 
     PowerShellModules = @(
@@ -131,8 +166,11 @@ $MigrationConfig = @{
         'python',
         'pip',
         'uv',
+        'nvm',
+        'pyenv',
+        'jenv',
         'java',
-        'javac'
+        'javac',
         'wt'
     )
 }

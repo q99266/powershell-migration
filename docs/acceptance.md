@@ -18,7 +18,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 Get-Command pwsh
 Get-Command wt
 Get-Command rg,bat,fd,git,gh,oh-my-posh,fzf,zoxide,delta
+Get-Command nvm,pyenv,jenv
 Get-Command python,pip,uv,java,javac
+nvm list
+pyenv version
+jenv list
 $settings = Get-Content "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json" -Raw | ConvertFrom-Json
 $settings.defaultProfile
 $settings.profiles.list | Where-Object { $_.guid -eq $settings.defaultProfile } | Select-Object name,commandline,source
@@ -46,4 +50,5 @@ echo $env:Path
 - `wt` 命令可调用。
 - Windows Terminal 默认 profile 是 PowerShell 7，而不是 Windows PowerShell 5.1 或其他 shell。
 - Windows Terminal `profiles.defaults.font.face` 为 `CaskaydiaCove Nerd Font` 或你在 `config.ps1` 中指定的 Nerd Font。
+- `nvm`、`pyenv`、`jenv` 都可调用。
 - `minimal.omp.json` 存在且被加载。
