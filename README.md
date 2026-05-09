@@ -65,7 +65,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 迁移边界
 
-本项目不是通用装机脚本。它默认按作者的 D 盘布局恢复环境；`config.ps1` 是可选配置入口，不是每次迁移前都必须改。
+本项目不是通用装机脚本，也不是企业级无交互装机器。它是面向个人环境的高质量半自动恢复器：默认按作者的 D 盘布局恢复终端体验，尽量把可自动化的安装、PATH、profile、字体和 Git 配置做掉；遇到 Windows Terminal 动态 profile、winget 安装器刷新、具体 Python/JDK 版本选择这类环境相关点，会审计、提示并要求复跑或人工确认。`config.ps1` 是可选配置入口，不是每次迁移前都必须改。
 
 Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`javac` 的解析状态；脚本不会强行设置 `JAVA_HOME`，也不会切换具体 JDK 版本。
 
@@ -77,7 +77,7 @@ Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`j
 
 三套管理器的闭环程度不一样：`nvm-windows` 会安装管理器、配置 D 盘目录，并安装/启用默认 Node 版本；`pyenv-win` 只安装管理器和 PATH，不强行安装 Python 版本；`JEnv for Windows` 只安装管理器和 PATH，真实 Java 可用性仍依赖后续 `jenv add/change/use` 或固定 `JAVA_HOME` 策略。
 
-Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7，并预写 Nerd Font 默认字体。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
+Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7 fallback GUID，并预写 Nerd Font 默认字体。正式判断默认 shell 时，脚本优先读取 `profiles.list` 里的真实 PowerShell 7 profile；fallback GUID 只作为 bootstrap 线索，不再当作“已经验证成功”。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
 
 PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`migrate.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
 

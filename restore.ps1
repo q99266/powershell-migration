@@ -687,6 +687,7 @@ function Get-WindowsTerminalState {
             DefaultGuid = $null
             PwshGuid = $null
             PwshName = $null
+            PwshProfileSource = $null
             IsDefaultPwsh = $false
             Error = 'Windows Terminal settings.json not found'
         }
@@ -709,12 +710,15 @@ function Get-WindowsTerminalState {
 
         $pwshGuid = $null
         $pwshName = $null
+        $pwshProfileSource = $null
         if ($pwshProfile) {
             $pwshGuid = $pwshProfile.guid
             $pwshName = $pwshProfile.name
+            $pwshProfileSource = 'settings'
         } elseif ($MigrationConfig.WindowsTerminalPwshFallbackGuid) {
             $pwshGuid = $MigrationConfig.WindowsTerminalPwshFallbackGuid
             $pwshName = 'PowerShell 7'
+            $pwshProfileSource = 'fallback'
         }
 
         return [pscustomobject]@{
@@ -726,7 +730,8 @@ function Get-WindowsTerminalState {
             DefaultGuid = $settings.defaultProfile
             PwshGuid = $pwshGuid
             PwshName = $pwshName
-            IsDefaultPwsh = ($pwshGuid -and $settings.defaultProfile -eq $pwshGuid)
+            PwshProfileSource = $pwshProfileSource
+            IsDefaultPwsh = ($pwshProfileSource -eq 'settings' -and $pwshGuid -and $settings.defaultProfile -eq $pwshGuid)
             Error = $null
         }
     } catch {
@@ -739,6 +744,7 @@ function Get-WindowsTerminalState {
             DefaultGuid = $null
             PwshGuid = $null
             PwshName = $null
+            PwshProfileSource = $null
             IsDefaultPwsh = $false
             Error = $_.Exception.Message
         }
@@ -809,6 +815,11 @@ function Set-WindowsTerminalDefaultPwshProfile {
     if (-not $state.PwshGuid) {
         Write-Host '[WARN] No PowerShell 7 profile found in Windows Terminal settings.' -ForegroundColor Yellow
         Add-Summary Manual 'Windows Terminal PowerShell 7 profile missing'
+        return
+    }
+    if ($state.PwshProfileSource -eq 'fallback') {
+        Write-Host "[WARN] PowerShell 7 profile was not found in Windows Terminal settings; fallback GUID is not enough to safely update defaultProfile: $($state.PwshGuid)" -ForegroundColor Yellow
+        Add-Summary Manual 'Windows Terminal PowerShell 7 profile must be generated before setting default profile'
         return
     }
     if ($state.IsDefaultPwsh) {
@@ -1096,6 +1107,10 @@ if (-not $wtState.Found) {
 } elseif (-not $wtState.PwshGuid) {
     Write-Host '[WARN] No PowerShell 7 profile found in Windows Terminal settings.' -ForegroundColor Yellow
     Add-Summary Manual 'Windows Terminal PowerShell 7 profile missing'
+} elseif ($wtState.PwshProfileSource -eq 'fallback') {
+    Write-Host "[WARN] PowerShell 7 profile not found in Windows Terminal settings. Fallback GUID is known but not treated as verified: $($wtState.PwshGuid)" -ForegroundColor Yellow
+    Write-Host 'Open Windows Terminal once or rerun after Windows Terminal generates its dynamic profiles, then use -SetWindowsTerminalDefaultPwsh if needed.'
+    Add-Summary Manual 'Windows Terminal PowerShell 7 profile not verified; fallback GUID only'
 } elseif ($wtState.IsDefaultPwsh) {
     Write-Host "[OK] Windows Terminal default profile is PowerShell 7: $($wtState.PwshName)"
     Add-Summary Ok 'Windows Terminal default profile is PowerShell 7'
