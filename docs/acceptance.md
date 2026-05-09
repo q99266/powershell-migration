@@ -10,7 +10,7 @@
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
 ```
 
-如果新电脑沿用完整默认布局，可以继续执行；如果工具目录、`terminal-setup` 路径、主题文件位置或 D 盘布局不同，先调整 `config.ps1`。
+如果新电脑沿用完整默认布局，可以继续执行；如果工具目录、主题文件位置或 D 盘布局不同，先调整 `config.ps1`。
 
 ## 已可调用
 
@@ -77,7 +77,7 @@ echo $env:Path
 
 ## 边界确认
 
-- `terminal-setup` 仍是外部依赖；基础美化不由本项目重写。
+- `terminal-setup/setup-terminal-en.ps1` 已随仓库携带；基础美化仍由它负责，本项目主脚本不重写它的 profile 逻辑。
 - `minimal.omp.json` 必须存在，来源可以是复制旧机器文件，也可以由 `terminal-setup` 重建。
 - `pyenv-win` 只证明管理器可用；具体 Python 版本是否安装由 `pyenv version`、`python --version`、`pip --version` 验证。
 - `JEnv for Windows` 只证明管理器可用；具体 JDK 是否可用由 `java -version`、`javac -version`、`JAVA_HOME` 和 `jenv list` 验证。

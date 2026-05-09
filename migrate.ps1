@@ -52,7 +52,8 @@ $syntaxFiles = @(
     (Join-Path $ScriptRoot 'config.ps1'),
     $RestoreScript,
     (Join-Path $ScriptRoot 'restore-terminal-combined.ps1'),
-    (Join-Path $ScriptRoot 'restore-draft.ps1')
+    (Join-Path $ScriptRoot 'restore-draft.ps1'),
+    (Join-Path $ScriptRoot 'terminal-setup\setup-terminal-en.ps1')
 ) | Where-Object { Test-Path -LiteralPath $_ }
 
 if ($TestSyntax) {

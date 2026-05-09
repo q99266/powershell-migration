@@ -47,7 +47,8 @@ if ($TestSyntax) {
         (Join-Path $ScriptRoot 'config.ps1'),
         (Join-Path $ScriptRoot 'restore.ps1'),
         (Join-Path $ScriptRoot 'restore-terminal-combined.ps1'),
-        (Join-Path $ScriptRoot 'restore-draft.ps1')
+        (Join-Path $ScriptRoot 'restore-draft.ps1'),
+        (Join-Path $ScriptRoot 'terminal-setup\setup-terminal-en.ps1')
     ) | Where-Object { Test-Path -LiteralPath $_ }
 
     [void](Test-ScriptSyntax -Paths $syntaxFiles)
@@ -1056,7 +1057,7 @@ if (Test-Path -LiteralPath $MigrationConfig.TerminalSetupMain) {
     Write-Host "[OK] terminal-setup found: $($MigrationConfig.TerminalSetupRoot)"
     Add-Summary Ok 'terminal-setup project found'
     if ($RunTerminalSetup) {
-        [void](Invoke-Native -FilePath 'pwsh' -Arguments @('-ExecutionPolicy','Bypass','-File',$MigrationConfig.TerminalSetupMain) -Label 'Run terminal-setup zed.ps1' -ShouldRun:$true)
+        [void](Invoke-Native -FilePath 'pwsh' -Arguments @('-ExecutionPolicy','Bypass','-File',$MigrationConfig.TerminalSetupMain) -Label 'Run terminal-setup setup-terminal-en.ps1' -ShouldRun:$true)
     } else {
         Write-Host 'terminal-setup owns base beautification: oh-my-posh, PSReadLine, Terminal-Icons, z, Windows Terminal font/theme.'
         Write-Host "Run manually when needed: pwsh -ExecutionPolicy Bypass -File `"$($MigrationConfig.TerminalSetupMain)`""
@@ -1304,7 +1305,7 @@ foreach ($kind in $script:Summary.Keys) {
 }
 
 Write-Section 'Recommended order'
-Write-Host '1. Run terminal-setup for base beautification.'
+Write-Host '1. Run migrate.ps1 -RunTerminalSetup for bundled terminal-setup base beautification.'
 Write-Host '2. Run migrate.ps1 without switches.'
 Write-Host '3. Review package output, then run migrate.ps1 -Install if needed.'
 Write-Host '4. If needed, run migrate.ps1 -SetWindowsTerminalDefaultPwsh.'

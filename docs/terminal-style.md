@@ -1,6 +1,6 @@
 # 终端美化说明
 
-基础美化由 `terminal-setup` 项目托管。本项目不覆盖它生成的 profile。
+基础美化由仓库内 bundled `terminal-setup/setup-terminal-en.ps1` 托管。本项目不覆盖它生成的 profile。
 
 ## 字体
 
@@ -34,11 +34,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 C:\Users\DP\Documents\PowerShell\themes\minimal.omp.json
 ```
 
-迁移新电脑时需要复制该文件，或让 `terminal-setup` 重新生成。
+迁移新电脑时需要复制该文件，或运行 bundled `terminal-setup/setup-terminal-en.ps1` 重新生成。
 
 ## Profile 策略
 
-`terminal-setup` 负责基础 profile。
+bundled `terminal-setup/setup-terminal-en.ps1` 负责基础 profile。
 
 `migrate.ps1` 只追加迁移增量：
 

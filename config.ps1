@@ -1,18 +1,24 @@
+$ConfigRoot = Split-Path -Parent $PSCommandPath
+if ([string]::IsNullOrWhiteSpace($ConfigRoot)) {
+    $ConfigRoot = $PSScriptRoot
+}
+$BundledTerminalSetupRoot = Join-Path $ConfigRoot 'terminal-setup'
+
 $MigrationConfig = @{
     MinimumPowerShellMajor = 5
     RecommendedPowerShellMajor = 7
 
-    ProjectRoot = 'D:\codexwork\powershell-migration'
-    BackupRoot = 'D:\codexwork\powershell-migration\backups'
-    LogRoot = 'D:\codexwork\powershell-migration\logs'
+    ProjectRoot = $ConfigRoot
+    BackupRoot = (Join-Path $ConfigRoot 'backups')
+    LogRoot = (Join-Path $ConfigRoot 'logs')
 
     ToolsRoot = 'D:\tools'
     WorkRoot = 'D:\work'
     CodexWorkRoot = 'D:\codexwork'
 
-    TerminalSetupRoot = 'D:\tools\terminal-setup-master\terminal-setup-master'
-    TerminalSetupMain = 'D:\tools\terminal-setup-master\terminal-setup-master\zed.ps1'
-    TerminalSetupLegacy = 'D:\tools\terminal-setup-master\terminal-setup-master\setup-terminal-cn.ps1'
+    TerminalSetupRoot = $BundledTerminalSetupRoot
+    TerminalSetupMain = (Join-Path $BundledTerminalSetupRoot 'setup-terminal-en.ps1')
+    TerminalSetupLegacy = $null
     WindowsTerminalSettingsPath = 'C:\Users\DP\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
     WindowsTerminalPackageId = 'Microsoft.WindowsTerminal'
     WindowsTerminalPwshFallbackGuid = '{574e775e-4f2a-5b96-ac1e-a2962a402336}'

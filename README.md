@@ -1,6 +1,6 @@
 # PowerShell Migration
 
-这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；只有新电脑沿用同一套目录布局、资产位置和 `terminal-setup` 路径时，通常才不需要先改 `config.ps1`。
+这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；基础美化脚本已随仓库放在 `terminal-setup/`，只有新电脑沿用同一套目录布局和资产位置时，通常才不需要先改 `config.ps1`。
 
 总入口只有一个：
 
@@ -12,7 +12,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 职责边界
 
-`terminal-setup` 负责基础美化：
+仓库内 bundled `terminal-setup/setup-terminal-en.ps1` 负责基础美化：
 
 - `oh-my-posh`
 - `PSReadLine`
@@ -36,7 +36,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 推荐顺序
 
-0. 先快速扫一眼 `config.ps1`。如果你沿用本项目的完整默认布局，通常可以不改；如果新电脑没有 D 盘、工具目录不同、`terminal-setup` 不在默认路径、PowerShell 主题文件不在默认位置，先改配置再跑。
+0. 先快速扫一眼 `config.ps1`。如果你沿用本项目的完整默认布局，通常可以不改；如果新电脑没有 D 盘、工具目录不同、PowerShell 主题文件不在默认位置，先改配置再跑。
 1. 新电脑先跑语法自检：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
@@ -47,7 +47,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
    ```
    该流程只做 bootstrap：安装 `Microsoft.PowerShell` 后会停止后续阶段。安装完成后必须重新打开 PowerShell 7，再继续执行本脚本。
-2. 先运行 `terminal-setup` 完成基础美化。
+2. 先运行 bundled `terminal-setup/setup-terminal-en.ps1` 完成基础美化。该脚本是交互式脚本，按提示确认即可：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -RunTerminalSetup
+   ```
 3. 运行 `migrate.ps1` 做 dry-run 审计。
 4. 确认缺失工具后运行 `migrate.ps1 -Install`。这一步也会安装 Windows Terminal，并在缺失时创建最小 `settings.json`。脚本会在 winget 安装后刷新当前进程的临时 PATH，然后继续后续检查和配置；如果个别安装器仍未让命令在当前进程可见，按输出提示重开 PowerShell 7 / Windows Terminal 后再跑一次 dry-run。
 5. 如果 Windows Terminal 默认 profile 不是 PowerShell 7，确认后运行：
@@ -91,7 +94,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 尤其要确认这些路径是否沿用：
 
-- `D:\tools\terminal-setup-master\terminal-setup-master`
+- `D:\codexwork\powershell-migration\terminal-setup\setup-terminal-en.ps1`
 - `D:\tools\nvm`
 - `D:\tools\pyenv\pyenv-win`
 - `D:\tools\jenv`
