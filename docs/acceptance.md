@@ -16,6 +16,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ```powershell
 Get-Command pwsh
+Get-Command wt
 Get-Command rg,bat,fd,git,gh,oh-my-posh,fzf,zoxide,delta
 Get-Command python,pip,uv,java,javac
 $settings = Get-Content "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json" -Raw | ConvertFrom-Json
@@ -30,6 +31,8 @@ echo $env:Path
 
 如果第一阶段是用 Windows PowerShell 5.1 安装 PowerShell 7，必须关闭旧窗口，打开新的 PowerShell 7 后再执行上述验收。
 
+如果第一阶段安装了 Windows Terminal，也建议关闭旧窗口，重新打开 Windows Terminal 后再验收 `wt`、默认 profile 和字体设置。
+
 ## 第二轮：重启后验证
 
 重启电脑后重复第一轮命令。
@@ -40,6 +43,7 @@ echo $env:Path
 - `Get-ChildItem` 图标正常显示。
 - Git 仓库中能看到分支/状态提示。
 - Windows Terminal 字体为指定 Nerd Font。
+- `wt` 命令可调用。
 - Windows Terminal 默认 profile 是 PowerShell 7，而不是 Windows PowerShell 5.1 或其他 shell。
 - Windows Terminal `profiles.defaults.font.face` 为 `CaskaydiaCove Nerd Font` 或你在 `config.ps1` 中指定的 Nerd Font。
 - `minimal.omp.json` 存在且被加载。

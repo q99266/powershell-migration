@@ -469,10 +469,19 @@ function Get-NpmGlobalPackageMap {
 
 function Get-WindowsTerminalState {
     $settingsPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.WindowsTerminalSettingsPath)
+    $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
+    $wtCommandFound = [bool]$wtCommand
+    $wtCommandSource = $null
+    if ($wtCommand) {
+        $wtCommandSource = $wtCommand.Source
+    }
     if (-not (Test-Path -LiteralPath $settingsPath)) {
         return [pscustomobject]@{
             Found = $false
+            CommandFound = $wtCommandFound
+            CommandSource = $wtCommandSource
             Path = $settingsPath
+            SettingsExists = $false
             DefaultGuid = $null
             PwshGuid = $null
             PwshName = $null
@@ -501,11 +510,17 @@ function Get-WindowsTerminalState {
         if ($pwshProfile) {
             $pwshGuid = $pwshProfile.guid
             $pwshName = $pwshProfile.name
+        } elseif ($MigrationConfig.WindowsTerminalPwshFallbackGuid) {
+            $pwshGuid = $MigrationConfig.WindowsTerminalPwshFallbackGuid
+            $pwshName = 'PowerShell 7'
         }
 
         return [pscustomobject]@{
             Found = $true
+            CommandFound = $wtCommandFound
+            CommandSource = $wtCommandSource
             Path = $settingsPath
+            SettingsExists = $true
             DefaultGuid = $settings.defaultProfile
             PwshGuid = $pwshGuid
             PwshName = $pwshName
@@ -515,13 +530,70 @@ function Get-WindowsTerminalState {
     } catch {
         return [pscustomobject]@{
             Found = $false
+            CommandFound = $wtCommandFound
+            CommandSource = $wtCommandSource
             Path = $settingsPath
+            SettingsExists = (Test-Path -LiteralPath $settingsPath)
             DefaultGuid = $null
             PwshGuid = $null
             PwshName = $null
             IsDefaultPwsh = $false
             Error = $_.Exception.Message
         }
+    }
+}
+
+function New-MinimalWindowsTerminalSettings {
+    $settingsPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.WindowsTerminalSettingsPath)
+    $settingsDir = Split-Path -Parent $settingsPath
+    New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null
+
+    $settings = [ordered]@{
+        '$schema' = 'https://aka.ms/terminal-profiles-schema'
+        defaultProfile = $MigrationConfig.WindowsTerminalPwshFallbackGuid
+        profiles = [ordered]@{
+            defaults = [ordered]@{
+                font = [ordered]@{
+                    face = $MigrationConfig.NerdFontName
+                }
+            }
+        }
+    }
+    $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding utf8
+    Write-Host "[OK] Created minimal Windows Terminal settings: $settingsPath" -ForegroundColor Green
+    Add-Summary Changed 'Created minimal Windows Terminal settings.json'
+}
+
+function Ensure-WindowsTerminalBaseline {
+    $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
+    if ($wtCommand) {
+        Write-Host "[OK] wt -> $($wtCommand.Source)"
+        Add-Summary Ok "wt -> $($wtCommand.Source)"
+    } else {
+        Write-Host '[MISS] Windows Terminal command: wt' -ForegroundColor Yellow
+        Add-Summary Missing 'Windows Terminal'
+        $installed = Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $MigrationConfig.WindowsTerminalPackageId) -Label 'Install Windows Terminal' -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount
+        $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
+        if (-not $wtCommand -and $Install -and -not $installed) {
+            Write-Host '[WARN] Windows Terminal install failed; settings bootstrap skipped.' -ForegroundColor Yellow
+            Add-Summary Failed 'Windows Terminal install failed; settings bootstrap skipped'
+            return
+        }
+    }
+
+    $settingsPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.WindowsTerminalSettingsPath)
+    if (Test-Path -LiteralPath $settingsPath) {
+        return
+    }
+
+    if ($Install) {
+        New-MinimalWindowsTerminalSettings
+        Write-Host '[WARN] Windows Terminal may need a fresh process after first install before wt is visible in PATH.' -ForegroundColor Yellow
+        Add-Summary Manual 'Reopen Windows Terminal after first install if wt is still unavailable in this process'
+    } else {
+        Write-Host "[WARN] Windows Terminal settings.json not found: $settingsPath" -ForegroundColor Yellow
+        Write-Host 'Run with -Install to install Windows Terminal and create a minimal settings.json.'
+        Add-Summary Manual 'Windows Terminal settings.json missing; run restore.ps1 -Install'
     }
 }
 
@@ -792,6 +864,9 @@ if ($Install -and $requiresPwshRerun) {
     return
 }
 
+Write-Section 'Windows Terminal baseline'
+Ensure-WindowsTerminalBaseline
+
 Write-Section 'Windows Terminal default shell'
 $wtState = Get-WindowsTerminalState
 if (-not $wtState.Found) {
@@ -975,9 +1050,10 @@ foreach ($kind in $script:Summary.Keys) {
 Write-Section 'Recommended order'
 Write-Host '1. Run terminal-setup for base beautification.'
 Write-Host '2. Run restore.ps1 without switches.'
-Write-Host '3. If needed, run restore.ps1 -SetWindowsTerminalDefaultPwsh.'
-Write-Host '4. Review PATH preview, then run restore.ps1 -FixPath.'
-Write-Host '5. Review package output, then run restore.ps1 -Install if needed.'
-Write-Host '6. Run restore.ps1 -ApplyGitConfig.'
-Write-Host '7. Run restore.ps1 -ShowProfileSnippet, then restore.ps1 -AppendProfileSnippet if acceptable.'
-Write-Host '8. Close all terminals, reopen Windows Terminal, verify commands and visual style.'
+Write-Host '3. Review package output, then run restore.ps1 -Install if needed.'
+Write-Host '4. If needed, run restore.ps1 -SetWindowsTerminalDefaultPwsh.'
+Write-Host '5. Run restore.ps1 -InstallNerdFont -SetWindowsTerminalFont if needed.'
+Write-Host '6. Review PATH preview, then run restore.ps1 -FixPath.'
+Write-Host '7. Run restore.ps1 -ApplyGitConfig.'
+Write-Host '8. Run restore.ps1 -ShowProfileSnippet, then restore.ps1 -AppendProfileSnippet if acceptable.'
+Write-Host '9. Close all terminals, reopen Windows Terminal, verify commands and visual style.'

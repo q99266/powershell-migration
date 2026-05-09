@@ -38,10 +38,31 @@ D:\codexwork\powershell-migration\backups
 ## 下载源
 
 - `winget` 使用 `config.ps1` 中的 `WingetSource`，并按 `NetworkRetryCount` 重试；winget 没有在本项目中配置伪国内镜像。
+- Windows Terminal 缺失时，`restore.ps1 -Install` 会通过 winget 安装 `Microsoft.WindowsTerminal`。
 - npm 安装使用脚本内置 registry fallback。默认先使用当前 npm 配置，失败后尝试 `https://registry.npmmirror.com`；传入 `-UseChinaMirrors` 时优先尝试 npmmirror，再回退当前 npm 配置。
 - PowerShell 模块安装会使用 `PowerShellGallery` 配置项，先尝试把仓库设为 trusted，失败后按 `NetworkRetryCount` 重试。
 - Nerd Font 下载内置多个 URL 候选。默认先尝试 GitHub release，失败后自动尝试加速代理；传入 `-UseChinaMirrors` 时优先尝试加速代理。
 - PowerShell Gallery 没有在脚本中自动替换为镜像源；网络失败时应手工处理 PSGallery、代理或离线安装。
+
+## Windows Terminal
+
+如果 Windows Terminal `settings.json` 不存在，`restore.ps1 -Install` 会创建最小配置：
+
+```json
+{
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+  "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+  "profiles": {
+    "defaults": {
+      "font": {
+        "face": "CaskaydiaCove Nerd Font"
+      }
+    }
+  }
+}
+```
+
+`defaultProfile` 使用 PowerShell 7 的 Windows Terminal fallback GUID。后续运行 `restore.ps1 -SetWindowsTerminalDefaultPwsh` 时会备份并更新同一个 `settings.json`。
 
 ## 字体
 
