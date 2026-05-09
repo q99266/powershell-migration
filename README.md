@@ -38,19 +38,31 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
    ```
+   如果 `pwsh` 还没有安装，先用 Windows PowerShell 跑：
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
+   ```
+   该流程会把 `Microsoft.PowerShell` 作为 winget 候选包；安装完成后重新打开 PowerShell 7。
 2. 先运行 `terminal-setup` 完成基础美化。
 3. 运行 `restore.ps1` 做 dry-run 审计。
-4. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
-5. 确认缺失工具后运行 `restore.ps1 -Install`。
-6. 运行 `restore.ps1 -ApplyGitConfig`。
-7. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
-8. 关闭所有终端，重新打开 Windows Terminal 验收。
+4. 如果 Windows Terminal 默认 profile 不是 PowerShell 7，确认后运行：
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -SetWindowsTerminalDefaultPwsh
+   ```
+5. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
+6. 确认缺失工具后运行 `restore.ps1 -Install`。
+7. 运行 `restore.ps1 -ApplyGitConfig`。
+8. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
+9. 关闭所有终端，重新打开 Windows Terminal 验收。
 
 ## 迁移边界
 
 本项目不是通用装机脚本。它以 `config.ps1` 为配置入口，默认路径适配作者当前机器。
 
 Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
+
+Windows Terminal 默认 shell 当前有显式审计和可选修复能力：默认只报告，只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并修改 Windows Terminal `settings.json` 的 `defaultProfile`。
 
 ## 新电脑语法报错处理
 
@@ -64,6 +76,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+```
+
+安装 PowerShell 7：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
 ```
 
 常见原因：

@@ -5,6 +5,7 @@ param(
     [switch]$AppendProfileSnippet,
     [switch]$ShowProfileSnippet,
     [switch]$RunTerminalSetup,
+    [switch]$SetWindowsTerminalDefaultPwsh,
     [switch]$AcceptProfileCommandOverrides,
     [switch]$TestSyntax
 )
@@ -186,6 +187,94 @@ function Get-NpmGlobalPackageMap {
     }
 }
 
+function Get-WindowsTerminalState {
+    $settingsPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.WindowsTerminalSettingsPath)
+    if (-not (Test-Path -LiteralPath $settingsPath)) {
+        return [pscustomobject]@{
+            Found = $false
+            Path = $settingsPath
+            DefaultGuid = $null
+            PwshGuid = $null
+            PwshName = $null
+            IsDefaultPwsh = $false
+            Error = 'Windows Terminal settings.json not found'
+        }
+    }
+
+    try {
+        $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $profiles = @()
+        if ($settings.profiles -and $settings.profiles.list) {
+            $profiles = @($settings.profiles.list)
+        }
+
+        $pwshProfile = $profiles |
+            Where-Object {
+                ($_.commandline -match 'pwsh(\.exe)?') -or
+                ($_.source -eq 'Windows.Terminal.PowershellCore') -or
+                ($_.name -match $MigrationConfig.WindowsTerminalPwshProfileNamePattern)
+            } |
+            Select-Object -First 1
+
+        $pwshGuid = $null
+        $pwshName = $null
+        if ($pwshProfile) {
+            $pwshGuid = $pwshProfile.guid
+            $pwshName = $pwshProfile.name
+        }
+
+        return [pscustomobject]@{
+            Found = $true
+            Path = $settingsPath
+            DefaultGuid = $settings.defaultProfile
+            PwshGuid = $pwshGuid
+            PwshName = $pwshName
+            IsDefaultPwsh = ($pwshGuid -and $settings.defaultProfile -eq $pwshGuid)
+            Error = $null
+        }
+    } catch {
+        return [pscustomobject]@{
+            Found = $false
+            Path = $settingsPath
+            DefaultGuid = $null
+            PwshGuid = $null
+            PwshName = $null
+            IsDefaultPwsh = $false
+            Error = $_.Exception.Message
+        }
+    }
+}
+
+function Set-WindowsTerminalDefaultPwshProfile {
+    $state = Get-WindowsTerminalState
+    if (-not $state.Found) {
+        Write-Host "[WARN] Cannot update Windows Terminal default profile: $($state.Error)" -ForegroundColor Yellow
+        Add-Summary Manual "Windows Terminal default profile not updated: $($state.Error)"
+        return
+    }
+    if (-not $state.PwshGuid) {
+        Write-Host '[WARN] No PowerShell 7 profile found in Windows Terminal settings.' -ForegroundColor Yellow
+        Add-Summary Manual 'Windows Terminal PowerShell 7 profile missing'
+        return
+    }
+    if ($state.IsDefaultPwsh) {
+        Write-Host "[OK] Windows Terminal default profile is already PowerShell 7: $($state.PwshName)"
+        Add-Summary Ok 'Windows Terminal default profile is PowerShell 7'
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $MigrationConfig.BackupRoot | Out-Null
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backupFile = Join-Path $MigrationConfig.BackupRoot "windows-terminal-settings-$stamp.json"
+    Copy-Item -LiteralPath $state.Path -Destination $backupFile -Force
+
+    $settings = Get-Content -LiteralPath $state.Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $settings.defaultProfile = $state.PwshGuid
+    $settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $state.Path -Encoding utf8
+    Write-Host "[OK] Windows Terminal default profile set to PowerShell 7: $($state.PwshName). Backup: $backupFile" -ForegroundColor Green
+    Add-Summary Changed "Windows Terminal default profile set to PowerShell 7; backup: $backupFile"
+}
+
 function Get-PathPlan {
     $userPathRaw = [Environment]::GetEnvironmentVariable('Path', 'User')
     $currentUser = Split-PathList $userPathRaw
@@ -360,6 +449,7 @@ Write-Host "Install: $Install"
 Write-Host "FixPath: $FixPath"
 Write-Host "ApplyGitConfig: $ApplyGitConfig"
 Write-Host "AppendProfileSnippet: $AppendProfileSnippet"
+Write-Host "SetWindowsTerminalDefaultPwsh: $SetWindowsTerminalDefaultPwsh"
 Write-Host 'Default mode audits only.'
 Write-Host 'Run with -TestSyntax first on a new machine if profile/script parsing looks suspicious.'
 
@@ -380,6 +470,42 @@ if (Test-Path -LiteralPath $MigrationConfig.TerminalSetupMain) {
 } else {
     Write-Host "[WARN] terminal-setup not found: $($MigrationConfig.TerminalSetupRoot)" -ForegroundColor Yellow
     Add-Summary Manual 'terminal-setup project missing'
+}
+
+Write-Section 'PowerShell 7 baseline'
+$pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+if ($pwshCommand) {
+    Write-Host "[OK] pwsh -> $($pwshCommand.Source)"
+    Add-Summary Ok "pwsh -> $($pwshCommand.Source)"
+} else {
+    Write-Host '[MISS] pwsh' -ForegroundColor Yellow
+    Add-Summary Missing 'pwsh'
+    [void](Invoke-Native -FilePath 'winget' -Arguments @('install','--id','Microsoft.PowerShell','--source','winget') -Label 'Install PowerShell 7' -ShouldRun:$Install)
+}
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host '[WARN] Current host is not PowerShell 7. Install PowerShell 7, then rerun with pwsh.' -ForegroundColor Yellow
+    Add-Summary Manual "Current host is PowerShell $($PSVersionTable.PSVersion), not PowerShell 7"
+}
+
+Write-Section 'Windows Terminal default shell'
+$wtState = Get-WindowsTerminalState
+if (-not $wtState.Found) {
+    Write-Host "[WARN] Windows Terminal settings not available: $($wtState.Error)" -ForegroundColor Yellow
+    Add-Summary Manual "Windows Terminal settings unavailable: $($wtState.Error)"
+} elseif (-not $wtState.PwshGuid) {
+    Write-Host '[WARN] No PowerShell 7 profile found in Windows Terminal settings.' -ForegroundColor Yellow
+    Add-Summary Manual 'Windows Terminal PowerShell 7 profile missing'
+} elseif ($wtState.IsDefaultPwsh) {
+    Write-Host "[OK] Windows Terminal default profile is PowerShell 7: $($wtState.PwshName)"
+    Add-Summary Ok 'Windows Terminal default profile is PowerShell 7'
+} else {
+    Write-Host "[WARN] Windows Terminal default profile is not PowerShell 7. Current default: $($wtState.DefaultGuid); PowerShell 7: $($wtState.PwshName) $($wtState.PwshGuid)" -ForegroundColor Yellow
+    Add-Summary Manual 'Windows Terminal default profile is not PowerShell 7'
+    if ($SetWindowsTerminalDefaultPwsh) {
+        Set-WindowsTerminalDefaultPwshProfile
+    } else {
+        Write-Host 'Run with -SetWindowsTerminalDefaultPwsh to persist this change after reviewing settings.'
+    }
 }
 
 Write-Section 'PATH audit'
@@ -542,8 +668,9 @@ foreach ($kind in $script:Summary.Keys) {
 Write-Section 'Recommended order'
 Write-Host '1. Run terminal-setup for base beautification.'
 Write-Host '2. Run restore.ps1 without switches.'
-Write-Host '3. Review PATH preview, then run restore.ps1 -FixPath.'
-Write-Host '4. Review package output, then run restore.ps1 -Install if needed.'
-Write-Host '5. Run restore.ps1 -ApplyGitConfig.'
-Write-Host '6. Run restore.ps1 -ShowProfileSnippet, then restore.ps1 -AppendProfileSnippet if acceptable.'
-Write-Host '7. Close all terminals, reopen Windows Terminal, verify commands and visual style.'
+Write-Host '3. If needed, run restore.ps1 -SetWindowsTerminalDefaultPwsh.'
+Write-Host '4. Review PATH preview, then run restore.ps1 -FixPath.'
+Write-Host '5. Review package output, then run restore.ps1 -Install if needed.'
+Write-Host '6. Run restore.ps1 -ApplyGitConfig.'
+Write-Host '7. Run restore.ps1 -ShowProfileSnippet, then restore.ps1 -AppendProfileSnippet if acceptable.'
+Write-Host '8. Close all terminals, reopen Windows Terminal, verify commands and visual style.'

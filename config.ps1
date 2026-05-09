@@ -13,6 +13,8 @@ $MigrationConfig = @{
     TerminalSetupRoot = 'D:\tools\terminal-setup-master\terminal-setup-master'
     TerminalSetupMain = 'D:\tools\terminal-setup-master\terminal-setup-master\zed.ps1'
     TerminalSetupLegacy = 'D:\tools\terminal-setup-master\terminal-setup-master\setup-terminal-cn.ps1'
+    WindowsTerminalSettingsPath = 'C:\Users\DP\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
+    WindowsTerminalPwshProfileNamePattern = '^PowerShell 7$'
 
     CliBinPath = 'D:\tools\cli-bin'
     FzfPath = 'D:\tools\fzf'
@@ -53,6 +55,7 @@ $MigrationConfig = @{
     )
 
     WingetPackages = @(
+        @{ Id = 'Microsoft.PowerShell'; Command = 'pwsh'; Owner = 'base' },
         @{ Id = 'Git.Git'; Command = 'git'; Owner = 'migration' },
         @{ Id = 'GitHub.cli'; Command = 'gh'; Owner = 'migration' },
         @{ Id = 'junegunn.fzf'; Command = 'fzf'; Owner = 'migration' },
@@ -106,5 +109,6 @@ $MigrationConfig = @{
         'uv',
         'java',
         'javac'
+        'wt'
     )
 }

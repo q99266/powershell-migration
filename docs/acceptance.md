@@ -15,8 +15,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 执行：
 
 ```powershell
+Get-Command pwsh
 Get-Command rg,bat,fd,git,gh,oh-my-posh,fzf,zoxide,delta
 Get-Command python,pip,uv,java,javac
+$settings = Get-Content "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json" -Raw | ConvertFrom-Json
+$settings.defaultProfile
+$settings.profiles.list | Where-Object { $_.guid -eq $settings.defaultProfile } | Select-Object name,commandline,source
 git status
 python --version
 java -version
@@ -33,4 +37,5 @@ echo $env:Path
 - `Get-ChildItem` 图标正常显示。
 - Git 仓库中能看到分支/状态提示。
 - Windows Terminal 字体为指定 Nerd Font。
+- Windows Terminal 默认 profile 是 PowerShell 7，而不是 Windows PowerShell 5.1 或其他 shell。
 - `minimal.omp.json` 存在且被加载。
