@@ -20,7 +20,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migr
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
 ```
 
-`setup-all.ps1` 会按固定顺序调用 `migrate.ps1`，任一阶段出现 `Failed` 会停止并返回非零退出码；普通 `Manual` 项只作为人工复查提示。`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移优先跑 `setup-all.ps1`；需要单独补某一步时再跑 `migrate.ps1`。`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考，不参与正式语法门禁。
+`setup-all.ps1` 会按固定顺序调用 `migrate.ps1`，任一阶段出现 `Failed` 会停止并返回非零退出码；普通 `Manual` 项只作为人工复查提示，阻塞型 `Manual` 会返回 `3` 并停止后续阶段。`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移优先跑 `setup-all.ps1`；需要单独补某一步时再跑 `migrate.ps1`。`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考，不参与正式语法门禁。
 
 ## 最短执行顺序
 
@@ -45,7 +45,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
    powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
    ```
-   这一步只负责安装 PowerShell 7。脚本提示停止后，关闭旧窗口，打开新的 PowerShell 7。
+   这一步只负责安装 PowerShell 7。脚本提示停止后会返回 `3`，表示需要关闭旧窗口并打开新的 PowerShell 7 后继续。
 
 3. 进入 PowerShell 7 后，先跑 bundled 基础美化：
    ```powershell
@@ -188,13 +188,13 @@ Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`j
 
 Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7 fallback GUID，并预写 Nerd Font 默认字体。正式判断默认 shell 时，脚本优先读取 `profiles.list` 里的真实 PowerShell 7 profile；fallback GUID 只作为 bootstrap 线索，不再当作“已经验证成功”。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
 
-PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`migrate.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
+PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`migrate.ps1 -Install` 只安装 PowerShell 7 并以退出码 `3` 停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。如果 `winget` 不可用，会改用官方 PowerShell 安装脚本下载 MSI 静默安装。
 
-winget 安装普通 CLI 后，本脚本会从 User/Machine PATH 和本项目 D 盘规划刷新当前进程的临时 PATH，尽量让 `git`、`gh`、`fd`、`bat`、`rg` 等命令在同一轮后续步骤里可见。少数安装器需要新 shell 才能完成 App Execution Alias 或安装目录刷新；遇到这种情况，重开 PowerShell 7 / Windows Terminal 后再运行 `migrate.ps1` 做审计和后续配置。
+winget 安装普通 CLI 后，本脚本会从 User/Machine PATH 和本项目 D 盘规划刷新当前进程的临时 PATH，尽量让 `git`、`gh`、`fd`、`bat`、`rg` 等命令在同一轮后续步骤里可见。少数安装器需要新 shell 才能完成 App Execution Alias 或安装目录刷新；遇到这种情况，重开 PowerShell 7 / Windows Terminal 后再运行 `migrate.ps1` 做审计和后续配置。如果 `winget` 本身不存在，普通 CLI、Windows Terminal、nvm-windows 安装会返回阻塞型 `Manual`（退出码 `3`），需要先安装 App Installer/winget 或手工安装对应组件后复跑。
 
 下载源策略：
 
-- `winget` 使用 `config.ps1` 中的 `WingetSource`，默认是官方 `winget` 源。本项目不伪造 winget 国内镜像；安装失败会按 `NetworkRetryCount` 重试。
+- `winget` 使用 `config.ps1` 中的 `WingetSource`，默认是官方 `winget` 源。本项目不伪造 winget 国内镜像；安装失败会按 `NetworkRetryCount` 重试。没有 `winget` 时，PowerShell 7 会走官方 MSI fallback；其他 winget 包会阻塞并提示先补 App Installer/winget 或手工安装。
 - Windows Terminal 通过 winget 包 `Microsoft.WindowsTerminal` 安装；安装后当前进程如果还看不到 `wt`，重开 Windows Terminal / PowerShell 7 后继续跑脚本。
 - nvm-windows 通过 winget 包 `CoreyButler.NVMforWindows` 安装，并修正 `NVM_HOME` / `NVM_SYMLINK` 到 D 盘布局。
 - pyenv-win 与 JEnv for Windows 使用脚本内置 GitHub ZIP 下载源和加速代理 fallback。

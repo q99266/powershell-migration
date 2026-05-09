@@ -24,6 +24,11 @@ $MigrationConfig = @{
     WindowsTerminalPwshFallbackGuid = '{574e775e-4f2a-5b96-ac1e-a2962a402336}'
     WindowsTerminalPwshProfileNamePattern = '^PowerShell 7$'
     WingetSource = 'winget'
+    PowerShellInstallScriptUrls = @(
+        'https://aka.ms/install-powershell.ps1',
+        'https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/install-powershell.ps1'
+    )
+    PowerShellInstallScriptPath = 'D:\codexwork\powershell-migration\downloads\install-powershell.ps1'
     NpmRegistry = $null
     NpmChinaMirror = 'https://registry.npmmirror.com'
     PowerShellGallery = 'PSGallery'

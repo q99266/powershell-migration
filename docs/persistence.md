@@ -37,7 +37,7 @@ D:\codexwork\powershell-migration\backups
 
 ## 下载源
 
-- `winget` 使用 `config.ps1` 中的 `WingetSource`，并按 `NetworkRetryCount` 重试；winget 没有在本项目中配置伪国内镜像。
+- `winget` 使用 `config.ps1` 中的 `WingetSource`，并按 `NetworkRetryCount` 重试；winget 没有在本项目中配置伪国内镜像。没有 `winget` 时，PowerShell 7 会使用官方 MSI 安装脚本 fallback；其他 winget 包会阻塞为退出码 `3`，需要先安装 App Installer/winget 或手工安装对应组件后复跑。
 - Windows Terminal 缺失时，`migrate.ps1 -Install` 会通过 winget 安装 `Microsoft.WindowsTerminal`。
 - nvm-windows 通过 winget 安装到 `D:\tools\nvm`，并设置 `NVM_HOME=D:\tools\nvm`、`NVM_SYMLINK=D:\tools\nodejs`。
 - pyenv-win 通过内置 GitHub ZIP 下载源安装到 `D:\tools\pyenv`。

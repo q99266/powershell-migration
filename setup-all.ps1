@@ -12,6 +12,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ScriptRoot = Split-Path -Parent $PSCommandPath
 $MigrateScript = Join-Path $ScriptRoot 'migrate.ps1'
+$script:LastPhaseExitCode = 0
 
 function Invoke-MigratePhase {
     param(
@@ -24,6 +25,7 @@ function Invoke-MigratePhase {
     Write-Host "pwsh -NoProfile -ExecutionPolicy Bypass -File `"$MigrateScript`" $($Arguments -join ' ')" -ForegroundColor DarkGray
 
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $MigrateScript @Arguments
+    $script:LastPhaseExitCode = $LASTEXITCODE
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[WARN] Phase failed or requested attention: $Name (exit=$LASTEXITCODE)" -ForegroundColor Yellow
         return $false
@@ -38,8 +40,8 @@ function Invoke-RequiredMigratePhase {
     )
 
     if (-not (Invoke-MigratePhase -Name $Name -Arguments $Arguments)) {
-        Write-Host "[STOP] Stopping one-click sequence at phase: $Name" -ForegroundColor Red
-        exit 1
+        Write-Host "[STOP] Stopping one-click sequence at phase: $Name (exit=$script:LastPhaseExitCode)" -ForegroundColor Red
+        exit $script:LastPhaseExitCode
     }
 }
 
@@ -69,6 +71,12 @@ if (-not $pwsh -or $PSVersionTable.PSVersion.Major -lt 7) {
 
     & powershell -NoProfile -ExecutionPolicy Bypass -File $MigrateScript -Install @mirrorArgs
     if ($LASTEXITCODE -ne 0) {
+        if ($LASTEXITCODE -eq 3) {
+            Write-Host ''
+            Write-Host '[STOP] Bootstrap phase requested manual continuation. Open a new PowerShell 7 window, then run this script again:' -ForegroundColor Yellow
+            Write-Host "pwsh -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $($mirrorArgs -join ' ')" -ForegroundColor Cyan
+            exit $LASTEXITCODE
+        }
         Write-Host "[STOP] PowerShell 7 bootstrap install phase failed. exit=$LASTEXITCODE" -ForegroundColor Red
         exit $LASTEXITCODE
     }

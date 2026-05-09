@@ -50,13 +50,15 @@ if ($TestSyntax) {
         (Join-Path $ScriptRoot 'terminal-setup\setup-terminal-en.ps1')
     ) | Where-Object { Test-Path -LiteralPath $_ }
 
-    [void](Test-ScriptSyntax -Paths $syntaxFiles)
-    return
+    if (Test-ScriptSyntax -Paths $syntaxFiles) {
+        exit 0
+    }
+    exit 1
 }
 
 if ($PSVersionTable.PSVersion.Major -lt $MigrationConfig.MinimumPowerShellMajor) {
     Write-Host "[ERR] PowerShell $($PSVersionTable.PSVersion) is too old. Minimum supported major version: $($MigrationConfig.MinimumPowerShellMajor)." -ForegroundColor Red
-    return
+    exit 2
 }
 
 if ($PSVersionTable.PSVersion.Major -lt $MigrationConfig.RecommendedPowerShellMajor) {
@@ -70,6 +72,7 @@ $script:Summary = @{
     Failed = New-Object System.Collections.Generic.List[string]
     Manual = New-Object System.Collections.Generic.List[string]
 }
+$script:ManualActionRequired = 0
 
 function Add-Summary {
     param(
@@ -78,6 +81,30 @@ function Add-Summary {
         [string]$Message
     )
     $script:Summary[$Kind].Add($Message) | Out-Null
+}
+
+function Add-RequiredManual {
+    param([string]$Message)
+    Add-Summary Manual $Message
+    $script:ManualActionRequired += 1
+}
+
+function Write-Summary {
+    foreach ($kind in $script:Summary.Keys) {
+        Write-Host "[$kind] $($script:Summary[$kind].Count)"
+        foreach ($item in $script:Summary[$kind]) {
+            Write-Host "  - $item"
+        }
+    }
+    if ($script:ManualActionRequired -gt 0) {
+        Write-Host "[ManualActionRequired] $script:ManualActionRequired"
+    }
+}
+
+function Get-RestoreExitCode {
+    if ($script:Summary['Failed'].Count -gt 0) { return 2 }
+    if ($script:ManualActionRequired -gt 0) { return 3 }
+    return 0
 }
 
 function Write-Section {
@@ -103,6 +130,10 @@ function Split-PathList {
 function Test-CommandExists {
     param([string]$Name)
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Test-WingetAvailable {
+    return [bool](Get-Command winget -ErrorAction SilentlyContinue)
 }
 
 function Invoke-Native {
@@ -215,6 +246,39 @@ function Invoke-DownloadWithFallback {
     return $false
 }
 
+function Install-PowerShell7 {
+    if (-not $Install) {
+        Write-Host 'Run with -Install to install PowerShell 7.'
+        return
+    }
+
+    if (Test-WingetAvailable) {
+        [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id 'Microsoft.PowerShell') -Label 'Install PowerShell 7' -ShouldRun:$true -RetryCount $MigrationConfig.NetworkRetryCount)
+        return
+    }
+
+    Write-Host '[WARN] winget is unavailable; using official PowerShell MSI installer fallback.' -ForegroundColor Yellow
+    $scriptPath = [Environment]::ExpandEnvironmentVariables($MigrationConfig.PowerShellInstallScriptPath)
+    $scriptDir = Split-Path -Parent $scriptPath
+    if (-not (Test-Path -LiteralPath $scriptDir)) {
+        New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null
+    }
+
+    $urls = Get-OrderedDownloadUrls -DefaultUrls $MigrationConfig.PowerShellInstallScriptUrls -ChinaMirrorUrls $null
+    if (-not (Invoke-DownloadWithFallback -Urls $urls -OutFile $scriptPath)) {
+        Add-Summary Failed 'PowerShell 7 fallback installer download failed'
+        return
+    }
+
+    [void](Invoke-NativeWithRetry -FilePath 'powershell' -Arguments @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $scriptPath,
+        '-UseMSI',
+        '-Quiet'
+    ) -Label 'Install PowerShell 7 via official MSI fallback' -ShouldRun:$true -RetryCount 1)
+}
+
 function Expand-ZipToDirectory {
     param(
         [string]$ZipPath,
@@ -267,6 +331,11 @@ function Ensure-NvmBaseline {
         Write-Host "[MISS] nvm -> $nvmExe" -ForegroundColor Yellow
         Add-Summary Missing 'nvm'
         if ($Install) {
+            if (-not (Test-WingetAvailable)) {
+                Write-Host '[WARN] winget is unavailable; nvm-windows install cannot be automated by this script.' -ForegroundColor Yellow
+                Add-RequiredManual 'winget unavailable; install App Installer/winget or nvm-windows manually, then rerun'
+                return
+            }
             [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments @(
                 'install',
                 '--id', $MigrationConfig.NvmPackageId,
@@ -784,7 +853,18 @@ function Ensure-WindowsTerminalBaseline {
     } else {
         Write-Host '[MISS] Windows Terminal command: wt' -ForegroundColor Yellow
         Add-Summary Missing 'Windows Terminal'
-        $installed = Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $MigrationConfig.WindowsTerminalPackageId) -Label 'Install Windows Terminal' -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount
+        $installed = $false
+        if ($Install) {
+            if (Test-WingetAvailable) {
+                $installed = Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $MigrationConfig.WindowsTerminalPackageId) -Label 'Install Windows Terminal' -ShouldRun:$true -RetryCount $MigrationConfig.NetworkRetryCount
+            } else {
+                Write-Host '[WARN] winget is unavailable; Windows Terminal install cannot be automated by this script.' -ForegroundColor Yellow
+                Add-RequiredManual 'winget unavailable; install App Installer/winget or Windows Terminal manually, then rerun'
+                return
+            }
+        } else {
+            [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $MigrationConfig.WindowsTerminalPackageId) -Label 'Install Windows Terminal' -ShouldRun:$false -RetryCount $MigrationConfig.NetworkRetryCount)
+        }
         $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
         if (-not $wtCommand -and $Install -and -not $installed) {
             Write-Host '[WARN] Windows Terminal install failed; settings bootstrap skipped.' -ForegroundColor Yellow
@@ -1021,7 +1101,7 @@ function Add-ProfileSnippet {
 
 if ($ShowProfileSnippet) {
     Get-ProfileAppendSnippet
-    return
+    exit 0
 }
 
 Write-Section 'Mode'
@@ -1040,7 +1120,7 @@ if (Test-Path -LiteralPath 'D:\') {
     Write-Host 'Path layout: using default D: drive layout from config.ps1.'
 } else {
     Write-Host '[WARN] D: drive not found. Review config.ps1 before installing or fixing PATH.' -ForegroundColor Yellow
-    Add-Summary Manual 'D: drive missing; review config.ps1 path layout'
+    Add-RequiredManual 'D: drive missing; review config.ps1 path layout'
 }
 if ($UseChinaMirrors) {
     Write-Host "NPM registry override: $($MigrationConfig.NpmChinaMirror)"
@@ -1067,7 +1147,11 @@ if (Test-Path -LiteralPath $MigrationConfig.TerminalSetupMain) {
     }
 } else {
     Write-Host "[WARN] terminal-setup not found: $($MigrationConfig.TerminalSetupRoot)" -ForegroundColor Yellow
-    Add-Summary Manual 'terminal-setup project missing'
+    if ($RunTerminalSetup) {
+        Add-RequiredManual 'terminal-setup project missing'
+    } else {
+        Add-Summary Manual 'terminal-setup project missing'
+    }
 }
 
 Write-Section 'PowerShell 7 baseline'
@@ -1079,25 +1163,21 @@ if ($pwshCommand) {
 } else {
     Write-Host '[MISS] pwsh' -ForegroundColor Yellow
     Add-Summary Missing 'pwsh'
-    [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id 'Microsoft.PowerShell') -Label 'Install PowerShell 7' -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
+    Install-PowerShell7
     $requiresPwshRerun = $true
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host '[WARN] Current host is not PowerShell 7. Install PowerShell 7, then rerun with pwsh.' -ForegroundColor Yellow
-    Add-Summary Manual "Current host is PowerShell $($PSVersionTable.PSVersion), not PowerShell 7"
+    Add-RequiredManual "Current host is PowerShell $($PSVersionTable.PSVersion), not PowerShell 7"
     $requiresPwshRerun = $true
 }
 if ($Install -and $requiresPwshRerun) {
     Write-Host '[STOP] Bootstrap phase complete or required. Open a new PowerShell 7 (pwsh) session and rerun migrate.ps1 for modules/profile/tools.' -ForegroundColor Yellow
-    Add-Summary Manual 'Rerun from a new PowerShell 7 session before continuing'
+    Add-RequiredManual 'Rerun from a new PowerShell 7 session before continuing'
     Write-Section 'Summary'
-    foreach ($kind in $script:Summary.Keys) {
-        Write-Host "[$kind] $($script:Summary[$kind].Count)"
-        foreach ($item in $script:Summary[$kind]) {
-            Write-Host "  - $item"
-        }
-    }
-    return
+    Write-Summary
+    $restoreExitCode = Get-RestoreExitCode
+    exit $restoreExitCode
 }
 
 Write-Section 'Windows Terminal baseline'
@@ -1157,14 +1237,28 @@ foreach ($name in $MigrationConfig.AcceptanceCommands) {
 
 Write-Section 'Winget packages'
 $wingetInstallAttempted = $false
+$wingetAvailable = Test-WingetAvailable
+if (-not $wingetAvailable) {
+    Write-Host '[WARN] winget is unavailable. CLI package installation through winget will be skipped.' -ForegroundColor Yellow
+    if ($Install) {
+        Add-RequiredManual 'winget unavailable; install App Installer/winget or install missing CLI packages manually, then rerun'
+    } else {
+        Add-Summary Manual 'winget unavailable; package installation requires App Installer/winget'
+    }
+}
 foreach ($pkg in $MigrationConfig.WingetPackages) {
     if ($pkg.Command -and (Test-CommandExists $pkg.Command)) {
         Write-Host "[OK] $($pkg.Command)"
         Add-Summary Ok "winget command present: $($pkg.Command)"
     } else {
-        if ($Install) { $wingetInstallAttempted = $true }
-        [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $pkg.Id) -Label "Install $($pkg.Id)" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
-        if (-not $Install) { Add-Summary Missing "winget package candidate: $($pkg.Id)" }
+        if ($Install -and $wingetAvailable) {
+            $wingetInstallAttempted = $true
+            [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $pkg.Id) -Label "Install $($pkg.Id)" -ShouldRun:$true -RetryCount $MigrationConfig.NetworkRetryCount)
+        } elseif (-not $Install) {
+            Add-Summary Missing "winget package candidate: $($pkg.Id)"
+        } else {
+            Add-Summary Missing "winget package candidate skipped: $($pkg.Id)"
+        }
     }
 }
 if ($wingetInstallAttempted) {
@@ -1304,12 +1398,7 @@ if (Test-Path -LiteralPath $MigrationConfig.ThemePath) {
 Write-Host 'Manual visual checks: prompt icons, Terminal-Icons output, Git branch icon, Windows Terminal font.'
 
 Write-Section 'Summary'
-foreach ($kind in $script:Summary.Keys) {
-    Write-Host "[$kind] $($script:Summary[$kind].Count)"
-    foreach ($item in $script:Summary[$kind]) {
-        Write-Host "  - $item"
-    }
-}
+Write-Summary
 
 Write-Section 'Recommended order'
 Write-Host '1. Run migrate.ps1 -RunTerminalSetup for bundled terminal-setup base beautification.'
@@ -1322,8 +1411,5 @@ Write-Host '7. Run migrate.ps1 -ApplyGitConfig.'
 Write-Host '8. Run migrate.ps1 -ShowProfileSnippet, then migrate.ps1 -AppendProfileSnippet if acceptable.'
 Write-Host '9. Close all terminals, reopen Windows Terminal, verify commands and visual style.'
 
-if ($script:Summary['Failed'].Count -gt 0) {
-    exit 2
-}
-
-exit 0
+$restoreExitCode = Get-RestoreExitCode
+exit $restoreExitCode
