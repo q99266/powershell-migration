@@ -1,6 +1,6 @@
 # PowerShell Migration
 
-这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；新电脑有 D 盘时不需要先改 `config.ps1`。
+这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；只有新电脑沿用同一套目录布局、资产位置和 `terminal-setup` 路径时，通常才不需要先改 `config.ps1`。
 
 总入口只有一个：
 
@@ -36,7 +36,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 推荐顺序
 
-0. 默认直接使用 D 盘布局。只有新电脑没有 D 盘、你想改工具目录、或 `terminal-setup` 不在默认路径时，才需要先改 `config.ps1`。
+0. 先快速扫一眼 `config.ps1`。如果你沿用本项目的完整默认布局，通常可以不改；如果新电脑没有 D 盘、工具目录不同、`terminal-setup` 不在默认路径、PowerShell 主题文件不在默认位置，先改配置再跑。
 1. 新电脑先跑语法自检：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
@@ -65,7 +65,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 迁移边界
 
-本项目不是通用装机脚本，也不是企业级无交互装机器。它是面向个人环境的高质量半自动恢复器：默认按作者的 D 盘布局恢复终端体验，尽量把可自动化的安装、PATH、profile、字体和 Git 配置做掉；遇到 Windows Terminal 动态 profile、winget 安装器刷新、具体 Python/JDK 版本选择这类环境相关点，会审计、提示并要求复跑或人工确认。`config.ps1` 是可选配置入口，不是每次迁移前都必须改。
+本项目不是通用装机脚本，也不是企业级无交互装机器。它是面向个人环境的高质量半自动恢复器：默认按作者的 D 盘布局恢复终端体验，尽量把可自动化的安装、PATH、profile、字体和 Git 配置做掉；遇到 Windows Terminal 动态 profile、winget 安装器刷新、具体 Python/JDK 版本选择这类环境相关点，会审计、提示并要求复跑或人工确认。`config.ps1` 是集中配置入口，不是每次迁移前都必须改，但也不能只看“有 D 盘”就跳过。
+
+尤其要确认这些路径是否沿用：
+
+- `D:\tools\terminal-setup-master\terminal-setup-master`
+- `D:\tools\nvm`
+- `D:\tools\pyenv\pyenv-win`
+- `D:\tools\jenv`
+- `C:\Users\DP\Documents\PowerShell\themes\minimal.omp.json`
 
 Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`javac` 的解析状态；脚本不会强行设置 `JAVA_HOME`，也不会切换具体 JDK 版本。
 
