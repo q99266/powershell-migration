@@ -18,6 +18,8 @@ CaskaydiaCove Nerd Font
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont
 ```
 
+`terminal-setup/setup-terminal-en.ps1` 中的字体安装交互只作为 fallback。正式迁移时优先使用上面的命令，因为它使用当前用户字体目录和脚本内置下载 fallback。
+
 脚本内置 GitHub release 和多个 GitHub 加速代理。默认自动逐个尝试；国内网络不稳时可以加 `-UseChinaMirrors`，脚本会把加速源排到前面：
 
 ```powershell

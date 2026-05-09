@@ -41,6 +41,8 @@ function Resolve-Command {
     return (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+$migrationScript = Join-Path (Split-Path -Parent $PSScriptRoot) 'migrate.ps1'
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Windows Terminal Setup Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
@@ -451,13 +453,19 @@ if ($fontInstalled) {
 } else {
     Write-Host ""
     Write-Host "Select font installation method:" -ForegroundColor Cyan
-    Write-Host "1. Use oh-my-posh installer (recommended, interactive)" -ForegroundColor White
-    Write-Host "2. Auto download CascadiaCode Nerd Font (about 46MB)" -ForegroundColor White
-    Write-Host "3. Skip font installation (install manually later)" -ForegroundColor White
+    Write-Host "1. Skip here; install with migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont (recommended)" -ForegroundColor White
+    Write-Host "2. Use oh-my-posh installer (interactive fallback)" -ForegroundColor White
+    Write-Host "3. Auto download CascadiaCode Nerd Font (legacy fallback, may need admin/network access)" -ForegroundColor White
     Write-Host ""
     $fontChoice = Read-Host "Please select (1/2/3)"
 
     if ($fontChoice -eq "1") {
+        Write-Host "[SKIP] Skipped font installation in terminal-setup" -ForegroundColor Yellow
+        Write-Host "   Run later: pwsh -NoProfile -ExecutionPolicy Bypass -File `"$migrationScript`" -InstallNerdFont -SetWindowsTerminalFont" -ForegroundColor Cyan
+        Write-Host "   That path uses current-user font install and built-in GitHub mirror fallbacks." -ForegroundColor Gray
+    }
+
+    if ($fontChoice -eq "2") {
         if ($ohMyPoshPath) {
             Write-Host ""
             Write-Host "Select font to install:" -ForegroundColor Cyan
@@ -501,12 +509,12 @@ if ($fontInstalled) {
             Write-Host "[OK] Font installation completed" -ForegroundColor Green
         } else {
             Write-Host "[WARN] WARNING: Oh My Posh not installed, cannot use this method" -ForegroundColor Yellow
-            Write-Host "Using auto download method..." -ForegroundColor Yellow
-            $fontChoice = "2"
+            Write-Host "Skipping font installation here. Run migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont later." -ForegroundColor Yellow
+            $fontChoice = "1"
         }
     }
 
-    if ($fontChoice -eq "2") {
+    if ($fontChoice -eq "3") {
         Write-Host ""
         Write-Host "Downloading CascadiaCode Nerd Font..." -ForegroundColor Yellow
 
@@ -577,11 +585,9 @@ if ($fontInstalled) {
                 }
             }
         }
-    } elseif ($fontChoice -eq "3") {
-        Write-Host "[SKIP] Skipped font installation" -ForegroundColor Yellow
-        Write-Host "   You can install later with: oh-my-posh font install" -ForegroundColor Cyan
-    } else {
+    } elseif ($fontChoice -ne "1" -and $fontChoice -ne "2") {
         Write-Host "[WARN] WARNING: Invalid selection, skipping font installation" -ForegroundColor Yellow
+        Write-Host "   Recommended later: migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont" -ForegroundColor Cyan
     }
 }
 Write-Host ""

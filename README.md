@@ -61,6 +61,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont
    ```
+   `terminal-setup` 里的字体安装交互只作为 fallback；推荐用本命令，因为它使用当前用户字体安装和内置下载 fallback。
 7. 确认 PATH 预览后运行 `migrate.ps1 -FixPath`。
 8. 运行 `migrate.ps1 -ApplyGitConfig`。
 9. 查看 `migrate.ps1 -ShowProfileSnippet`，确认后运行 `migrate.ps1 -AppendProfileSnippet`。
