@@ -1,6 +1,8 @@
 # PowerShell Migration
 
-这是个人 Windows + PowerShell 7 终端环境迁移方案。正式入口只有一个：
+这是个人 Windows + PowerShell 7 终端环境迁移方案。默认配置绑定作者当前机器路径；迁移到新电脑前，先检查并按需修改 `config.ps1`。
+
+正式入口只有一个：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1
@@ -23,24 +25,32 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 - PATH 顺序修复与备份
 - `fzf` / `PSFzf`
 - `bat` / `fd` / `rg` / `jq` / `delta` / `lazygit` / `zoxide` / `es.exe`
-- npm 全局 CLI
+- npm 全局 CLI（先检测，缺失才安装，避免无差别升级）
 - Git delta 全局配置
-- Python / Java 运行时检查
+- Python 运行时检查
+- Java 运行时只审计，不自动迁移
 - profile 追加片段，默认不覆盖已有 profile
 
 ## 推荐顺序
 
-0. 新电脑先跑语法自检：
+0. 新电脑先打开 `config.ps1`，确认 `ProjectRoot`、`ToolsRoot`、`TerminalSetupRoot`、`ThemePath`、PATH 优先级等路径是否符合新机器。
+1. 新电脑先跑语法自检：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
    ```
-1. 先运行 `terminal-setup` 完成基础美化。
-2. 运行 `restore.ps1` 做 dry-run 审计。
-3. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
-4. 确认缺失工具后运行 `restore.ps1 -Install`。
-5. 运行 `restore.ps1 -ApplyGitConfig`。
-6. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
-7. 关闭所有终端，重新打开 Windows Terminal 验收。
+2. 先运行 `terminal-setup` 完成基础美化。
+3. 运行 `restore.ps1` 做 dry-run 审计。
+4. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
+5. 确认缺失工具后运行 `restore.ps1 -Install`。
+6. 运行 `restore.ps1 -ApplyGitConfig`。
+7. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
+8. 关闭所有终端，重新打开 Windows Terminal 验收。
+
+## 迁移边界
+
+本项目不是通用装机脚本。它以 `config.ps1` 为配置入口，默认路径适配作者当前机器。
+
+Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
 
 ## 新电脑语法报错处理
 

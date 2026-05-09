@@ -23,13 +23,29 @@ Get-Command python,pip,uv,uvx
 
 ## Java
 
-Windows PowerShell 下优先采用：
+当前能力：只审计，不迁移。
+
+脚本会检查：
+
+- `JAVA_HOME`
+- `java`
+- `javac`
+- `java` 是否命中 `jenv`
+
+脚本不会：
+
+- 设置 `JAVA_HOME`
+- 修改 Java PATH
+- 安装 JDK
+- 切换 Java 版本
+
+如果后续要闭环 Java 迁移，Windows PowerShell 下优先采用：
 
 ```text
 JAVA_HOME + 固定 JDK 目录 + PATH
 ```
 
-当前脚本默认只检测 Java 状态，不预设新电脑 JDK 路径。
+当前脚本默认不预设新电脑 JDK 路径。
 
 如果后续决定采用固定 JDK 目录，再在 `config.ps1` 中设置：
 

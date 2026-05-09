@@ -146,6 +146,32 @@ function Test-ModuleAvailableCompat {
     return [pscustomobject]@{ Found = $false; Path = $null }
 }
 
+function Get-NpmGlobalPackageMap {
+    if (-not (Test-CommandExists npm)) {
+        return @{}
+    }
+
+    try {
+        $json = (& npm list -g --depth=0 --json 2>$null) -join [Environment]::NewLine
+        if ([string]::IsNullOrWhiteSpace($json)) {
+            return @{}
+        }
+
+        $parsed = $json | ConvertFrom-Json
+        $map = @{}
+        if ($parsed.dependencies) {
+            $parsed.dependencies.PSObject.Properties | ForEach-Object {
+                $map[$_.Name] = $_.Value.version
+            }
+        }
+        return $map
+    } catch {
+        Write-Host "[WARN] Failed to inspect npm global packages: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Summary Manual 'npm global package inspection failed; review manually'
+        return @{}
+    }
+}
+
 function Get-PathPlan {
     $userPathRaw = [Environment]::GetEnvironmentVariable('Path', 'User')
     $currentUser = Split-PathList $userPathRaw
@@ -359,9 +385,15 @@ foreach ($module in $MigrationConfig.PowerShellModules) {
 
 Write-Section 'npm global packages'
 if (Test-CommandExists npm) {
+    $npmGlobal = Get-NpmGlobalPackageMap
     foreach ($pkg in $MigrationConfig.NpmGlobalPackages) {
-        [void](Invoke-Native -FilePath 'npm' -Arguments @('install','-g',$pkg) -Label "Install npm global package $pkg" -ShouldRun:$Install)
-        if (-not $Install) { Add-Summary Manual "npm global package candidate: $pkg" }
+        if ($npmGlobal.ContainsKey($pkg)) {
+            Write-Host "[OK] npm global package $pkg@$($npmGlobal[$pkg])"
+            Add-Summary Ok "npm global package $pkg"
+        } else {
+            [void](Invoke-Native -FilePath 'npm' -Arguments @('install','-g',$pkg) -Label "Install missing npm global package $pkg" -ShouldRun:$Install)
+            if (-not $Install) { Add-Summary Missing "npm global package $pkg" }
+        }
     }
 } else {
     Write-Host '[WARN] npm is missing. Install Node.js first.'
@@ -400,6 +432,7 @@ foreach ($name in @('python','pip','uv','uvx')) {
 }
 
 Write-Section 'Java runtime'
+Write-Host 'Java mode: audit only. This script does not set JAVA_HOME or edit Java PATH.'
 $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')
 if (-not $javaHome) { $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine') }
 Write-Host "JAVA_HOME: $javaHome"
