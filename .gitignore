@@ -1,0 +1,9 @@
+backups/
+logs/
+*.log
+*.tmp
+*.bak
+*.bak-*
+*.local.ps1
+.DS_Store
+Thumbs.db
