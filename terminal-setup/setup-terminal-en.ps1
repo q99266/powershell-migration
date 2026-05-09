@@ -13,6 +13,34 @@ if ($currentPolicy -ne 'Bypass' -and $currentPolicy -ne 'Unrestricted') {
     }
 }
 
+function Split-PathEntries {
+    param([string]$PathValue)
+    if ([string]::IsNullOrWhiteSpace($PathValue)) { return @() }
+    return @($PathValue -split ';' | ForEach-Object {
+        $entry = [Environment]::ExpandEnvironmentVariables($_.Trim())
+        if ($entry.Length -gt 3) { $entry = $entry.TrimEnd('\') }
+        $entry
+    } | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Update-CurrentProcessPath {
+    $machinePath = Split-PathEntries ([Environment]::GetEnvironmentVariable('Path', 'Machine'))
+    $userPath = Split-PathEntries ([Environment]::GetEnvironmentVariable('Path', 'User'))
+    $currentPath = Split-PathEntries $env:Path
+    $knownAliasPaths = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
+        (Join-Path $env:USERPROFILE 'AppData\Local\Microsoft\WindowsApps')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+    $env:Path = (($machinePath + $userPath + $knownAliasPaths + $currentPath) | Select-Object -Unique) -join ';'
+    Write-Host "[OK] Current process PATH refreshed" -ForegroundColor Green
+}
+
+function Resolve-Command {
+    param([string]$Name)
+    return (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Windows Terminal Setup Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
@@ -280,7 +308,8 @@ Write-Host ""
 
 # Step 2: Check winget availability
 Write-Host "[TOOL] Step 2: Checking winget..." -ForegroundColor Green
-$wingetAvailable = Get-Command winget -ErrorAction SilentlyContinue
+Update-CurrentProcessPath
+$wingetAvailable = Resolve-Command winget
 if (!$wingetAvailable) {
     Write-Host "[ERROR] ERROR: winget not installed or unavailable" -ForegroundColor Red
     Write-Host ""
@@ -338,6 +367,13 @@ if (!$wtInstalled) {
                 winget install Microsoft.WindowsTerminal --accept-source-agreements --accept-package-agreements
             }
             Write-Host "[OK] Windows Terminal installation completed" -ForegroundColor Green
+            Update-CurrentProcessPath
+            $wtCommand = Resolve-Command wt
+            if ($wtCommand) {
+                Write-Host "[OK] wt is visible in current process: $($wtCommand.Source)" -ForegroundColor Green
+            } else {
+                Write-Host "[WARN] wt is still not visible in current process. Reopen PowerShell or Windows Terminal after this script." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "[WARN] WARNING: Auto installation failed" -ForegroundColor Yellow
             Write-Host "   Please install manually from Microsoft Store" -ForegroundColor Cyan
@@ -353,7 +389,7 @@ Write-Host ""
 
 # Step 4: Install Oh My Posh
 Write-Host "[THEME] Step 4: Checking/Installing Oh My Posh..." -ForegroundColor Green
-$ohMyPoshPath = Get-Command oh-my-posh -ErrorAction SilentlyContinue
+$ohMyPoshPath = Resolve-Command oh-my-posh
 if ($ohMyPoshPath) {
     Write-Host "[OK] Oh My Posh is already installed" -ForegroundColor Green
 } else {
@@ -367,7 +403,13 @@ if ($ohMyPoshPath) {
             }
             Write-Host "[OK] Oh My Posh installation completed" -ForegroundColor Green
 
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+            Update-CurrentProcessPath
+            $ohMyPoshPath = Resolve-Command oh-my-posh
+            if ($ohMyPoshPath) {
+                Write-Host "[OK] oh-my-posh is visible in current process: $($ohMyPoshPath.Source)" -ForegroundColor Green
+            } else {
+                Write-Host "[WARN] oh-my-posh is still not visible in current process. Reopen PowerShell and rerun if font/profile setup needs it." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "[WARN] WARNING: Auto installation failed" -ForegroundColor Yellow
             Write-Host "Please install manually: winget install JanDeDobbeleer.OhMyPosh" -ForegroundColor Cyan
@@ -400,6 +442,8 @@ Write-Host ""
 
 # Step 5: Install Nerd Font
 Write-Host "[FONT] Step 5: Installing Nerd Font..." -ForegroundColor Green
+Update-CurrentProcessPath
+$ohMyPoshPath = Resolve-Command oh-my-posh
 
 $fontInstalled = Test-Path "C:\Windows\Fonts\CaskaydiaCoveNerdFont-Regular.ttf"
 if ($fontInstalled) {
@@ -714,5 +758,11 @@ Write-Host ""
 # Ask if open Windows Terminal immediately
 $response = Read-Host "Open Windows Terminal now to see the result? (Y/N)"
 if ($response -eq 'Y' -or $response -eq 'y') {
-    Start-Process wt.exe
+    Update-CurrentProcessPath
+    $wtCommand = Resolve-Command wt
+    if ($wtCommand) {
+        Start-Process $wtCommand.Source
+    } else {
+        Write-Host "[WARN] wt is not visible in current process. Reopen Windows Terminal manually after closing this window." -ForegroundColor Yellow
+    }
 }
