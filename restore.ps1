@@ -892,6 +892,18 @@ function Set-UserPathFromPlan {
     Write-Host "[OK] User PATH updated. Backup: $backupFile" -ForegroundColor Green
 }
 
+function Update-CurrentProcessPathFromRegistry {
+    $userPath = Split-PathList ([Environment]::GetEnvironmentVariable('Path', 'User'))
+    $machinePath = Split-PathList ([Environment]::GetEnvironmentVariable('Path', 'Machine'))
+    $currentPath = Split-PathList $env:Path
+    $plannedFirst = @($MigrationConfig.PreferredPathFirst | ForEach-Object { Normalize-PathEntry $_ } | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+
+    $env:Path = (($plannedFirst + $userPath + $machinePath + $currentPath) | Select-Object -Unique) -join ';'
+    Set-CurrentRuntimeManagerEnvironment
+    Write-Host '[OK] Current process PATH refreshed from User/Machine PATH.'
+    Write-Host '[WARN] Some winget installers only become visible after reopening PowerShell 7 / Windows Terminal.' -ForegroundColor Yellow
+}
+
 function Get-ProfileAppendSnippet {
     if ($AcceptProfileCommandOverrides) {
         $commandBlock = @'
@@ -1125,13 +1137,27 @@ foreach ($name in $MigrationConfig.AcceptanceCommands) {
 }
 
 Write-Section 'Winget packages'
+$wingetInstallAttempted = $false
 foreach ($pkg in $MigrationConfig.WingetPackages) {
     if ($pkg.Command -and (Test-CommandExists $pkg.Command)) {
         Write-Host "[OK] $($pkg.Command)"
         Add-Summary Ok "winget command present: $($pkg.Command)"
     } else {
+        if ($Install) { $wingetInstallAttempted = $true }
         [void](Invoke-NativeWithRetry -FilePath 'winget' -Arguments (Get-WingetInstallArguments -Id $pkg.Id) -Label "Install $($pkg.Id)" -ShouldRun:$Install -RetryCount $MigrationConfig.NetworkRetryCount)
         if (-not $Install) { Add-Summary Missing "winget package candidate: $($pkg.Id)" }
+    }
+}
+if ($wingetInstallAttempted) {
+    Update-CurrentProcessPathFromRegistry
+    foreach ($pkg in $MigrationConfig.WingetPackages | Where-Object { $_.Command }) {
+        if (Test-CommandExists $pkg.Command) {
+            Write-Host "[OK] visible after PATH refresh: $($pkg.Command)"
+            Add-Summary Ok "winget command visible after PATH refresh: $($pkg.Command)"
+        } else {
+            Write-Host "[WARN] still not visible in current process: $($pkg.Command). Reopen PowerShell 7 and rerun migrate.ps1." -ForegroundColor Yellow
+            Add-Summary Manual "reopen PowerShell 7 and rerun for command: $($pkg.Command)"
+        }
     }
 }
 

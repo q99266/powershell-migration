@@ -49,7 +49,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
    该流程只做 bootstrap：安装 `Microsoft.PowerShell` 后会停止后续阶段。安装完成后必须重新打开 PowerShell 7，再继续执行本脚本。
 2. 先运行 `terminal-setup` 完成基础美化。
 3. 运行 `migrate.ps1` 做 dry-run 审计。
-4. 确认缺失工具后运行 `migrate.ps1 -Install`。这一步也会安装 Windows Terminal，并在缺失时创建最小 `settings.json`。
+4. 确认缺失工具后运行 `migrate.ps1 -Install`。这一步也会安装 Windows Terminal，并在缺失时创建最小 `settings.json`。脚本会在 winget 安装后刷新当前进程的临时 PATH，然后继续后续检查和配置；如果个别安装器仍未让命令在当前进程可见，按输出提示重开 PowerShell 7 / Windows Terminal 后再跑一次 dry-run。
 5. 如果 Windows Terminal 默认 profile 不是 PowerShell 7，确认后运行：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -SetWindowsTerminalDefaultPwsh
@@ -75,11 +75,13 @@ Java 当前会安装/检查 JEnv 管理器，并报告 `JAVA_HOME`、`java`、`j
 - `pyenv-win`：`D:\tools\pyenv\pyenv-win`。
 - `JEnv for Windows`：`D:\tools\jenv`。
 
-脚本负责安装管理器和 PATH/env 基础配置；Python 具体版本、Java 具体 JDK 版本仍以审计和提示为主，不在迁移时强行切换。
+三套管理器的闭环程度不一样：`nvm-windows` 会安装管理器、配置 D 盘目录，并安装/启用默认 Node 版本；`pyenv-win` 只安装管理器和 PATH，不强行安装 Python 版本；`JEnv for Windows` 只安装管理器和 PATH，真实 Java 可用性仍依赖后续 `jenv add/change/use` 或固定 `JAVA_HOME` 策略。
 
 Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7，并预写 Nerd Font 默认字体。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
 
 PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`migrate.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
+
+winget 安装普通 CLI 后，本脚本会从 User/Machine PATH 和本项目 D 盘规划刷新当前进程的临时 PATH，尽量让 `git`、`gh`、`fd`、`bat`、`rg` 等命令在同一轮后续步骤里可见。少数安装器需要新 shell 才能完成 App Execution Alias 或安装目录刷新；遇到这种情况，重开 PowerShell 7 / Windows Terminal 后再运行 `migrate.ps1` 做审计和后续配置。
 
 下载源策略：
 
