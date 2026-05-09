@@ -52,8 +52,6 @@ $syntaxFiles = @(
     (Join-Path $ScriptRoot 'migrate.ps1'),
     (Join-Path $ScriptRoot 'config.ps1'),
     $RestoreScript,
-    (Join-Path $ScriptRoot 'restore-terminal-combined.ps1'),
-    (Join-Path $ScriptRoot 'restore-draft.ps1'),
     (Join-Path $ScriptRoot 'terminal-setup\setup-terminal-en.ps1')
 ) | Where-Object { Test-Path -LiteralPath $_ }
 
@@ -84,7 +82,11 @@ if (-not $SkipSyntaxCheck -and -not $ShowProfileSnippet) {
     -SetWindowsTerminalFont:$SetWindowsTerminalFont `
     -AcceptProfileCommandOverrides:$AcceptProfileCommandOverrides `
     -UseChinaMirrors:$UseChinaMirrors
-if ($?) {
-    exit 0
+
+$restoreExitCode = $LASTEXITCODE
+if ($null -ne $restoreExitCode) {
+    exit $restoreExitCode
 }
+
+if ($?) { exit 0 }
 exit 1

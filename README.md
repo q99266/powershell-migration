@@ -2,7 +2,7 @@
 
 这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；基础美化脚本已随仓库放在 `terminal-setup/`，只有新电脑沿用同一套目录布局和资产位置时，通常才不需要先改 `config.ps1`。
 
-一键入口：
+推荐入口是一键编排脚本：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
@@ -14,13 +14,13 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\setup-all.ps1
 ```
 
-分阶段入口：
+分阶段入口用于单独补某一步：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
 ```
 
-`setup-all.ps1` 会按固定顺序调用 `migrate.ps1`。`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移优先跑 `setup-all.ps1`；需要单独补某一步时再跑 `migrate.ps1`。`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考。
+`setup-all.ps1` 会按固定顺序调用 `migrate.ps1`，任一阶段出现 `Failed` 会停止并返回非零退出码；普通 `Manual` 项只作为人工复查提示。`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移优先跑 `setup-all.ps1`；需要单独补某一步时再跑 `migrate.ps1`。`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考，不参与正式语法门禁。
 
 ## 最短执行顺序
 

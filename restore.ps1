@@ -47,8 +47,6 @@ if ($TestSyntax) {
         (Join-Path $ScriptRoot 'migrate.ps1'),
         (Join-Path $ScriptRoot 'config.ps1'),
         (Join-Path $ScriptRoot 'restore.ps1'),
-        (Join-Path $ScriptRoot 'restore-terminal-combined.ps1'),
-        (Join-Path $ScriptRoot 'restore-draft.ps1'),
         (Join-Path $ScriptRoot 'terminal-setup\setup-terminal-en.ps1')
     ) | Where-Object { Test-Path -LiteralPath $_ }
 
@@ -288,7 +286,7 @@ function Ensure-NvmBaseline {
 
     if (-not (Test-Path -LiteralPath $nvmExe)) {
         Write-Host '[WARN] nvm install did not produce nvm.exe yet. Reopen terminal and rerun if winget requested elevation.' -ForegroundColor Yellow
-        Add-Summary Manual 'nvm install pending; rerun after installer completes'
+        Add-Summary Failed 'nvm install pending; rerun after installer completes'
         return
     }
 
@@ -475,7 +473,11 @@ function Set-WindowsTerminalDefaultFont {
     $state = Get-WindowsTerminalState
     if (-not $state.Found) {
         Write-Host "[WARN] Cannot update Windows Terminal font: $($state.Error)" -ForegroundColor Yellow
-        Add-Summary Manual "Windows Terminal font not updated: $($state.Error)"
+        if ($SetWindowsTerminalFont) {
+            Add-Summary Failed "Windows Terminal font not updated: $($state.Error)"
+        } else {
+            Add-Summary Manual "Windows Terminal font not updated: $($state.Error)"
+        }
         return
     }
 
@@ -487,7 +489,7 @@ function Set-WindowsTerminalDefaultFont {
     if ((-not $InstallNerdFont) -and (-not (Test-FontInstalled -FontName $MigrationConfig.NerdFontName))) {
         Write-Host "[WARN] Refusing to set Windows Terminal font because it is not installed: $($MigrationConfig.NerdFontName)" -ForegroundColor Yellow
         Write-Host 'Run with -InstallNerdFont -SetWindowsTerminalFont to download, install, and apply it in one pass.'
-        Add-Summary Manual "Install Nerd Font before setting Windows Terminal font: $($MigrationConfig.NerdFontName)"
+        Add-Summary Failed "Install Nerd Font before setting Windows Terminal font: $($MigrationConfig.NerdFontName)"
         return
     }
 
@@ -811,17 +813,17 @@ function Set-WindowsTerminalDefaultPwshProfile {
     $state = Get-WindowsTerminalState
     if (-not $state.Found) {
         Write-Host "[WARN] Cannot update Windows Terminal default profile: $($state.Error)" -ForegroundColor Yellow
-        Add-Summary Manual "Windows Terminal default profile not updated: $($state.Error)"
+        Add-Summary Failed "Windows Terminal default profile not updated: $($state.Error)"
         return
     }
     if (-not $state.PwshGuid) {
         Write-Host '[WARN] No PowerShell 7 profile found in Windows Terminal settings.' -ForegroundColor Yellow
-        Add-Summary Manual 'Windows Terminal PowerShell 7 profile missing'
+        Add-Summary Failed 'Windows Terminal PowerShell 7 profile missing'
         return
     }
     if ($state.PwshProfileSource -eq 'fallback') {
         Write-Host "[WARN] PowerShell 7 profile was not found in Windows Terminal settings; fallback GUID is not enough to safely update defaultProfile: $($state.PwshGuid)" -ForegroundColor Yellow
-        Add-Summary Manual 'Windows Terminal PowerShell 7 profile must be generated before setting default profile'
+        Add-Summary Failed 'Windows Terminal PowerShell 7 profile must be generated before setting default profile'
         return
     }
     if ($state.IsDefaultPwsh) {
@@ -1173,7 +1175,7 @@ if ($wingetInstallAttempted) {
             Add-Summary Ok "winget command visible after PATH refresh: $($pkg.Command)"
         } else {
             Write-Host "[WARN] still not visible in current process: $($pkg.Command). Reopen PowerShell 7 and rerun migrate.ps1." -ForegroundColor Yellow
-            Add-Summary Manual "reopen PowerShell 7 and rerun for command: $($pkg.Command)"
+            Add-Summary Failed "reopen PowerShell 7 and rerun for command: $($pkg.Command)"
         }
     }
 }
@@ -1196,7 +1198,11 @@ if (Test-CommandExists npm) {
     if (-not $npmInspection.Succeeded) {
         Write-Host "[WARN] Failed to inspect npm global packages: $($npmInspection.Error)" -ForegroundColor Yellow
         Write-Host '[WARN] Skipping npm global package installation to avoid accidental mass upgrades.' -ForegroundColor Yellow
-        Add-Summary Manual 'npm global package inspection failed; skipped npm install stage'
+        if ($Install) {
+            Add-Summary Failed 'npm global package inspection failed; skipped npm install stage'
+        } else {
+            Add-Summary Manual 'npm global package inspection failed; skipped npm install stage'
+        }
     } else {
         $npmGlobal = $npmInspection.Packages
         foreach ($pkg in $MigrationConfig.NpmGlobalPackages) {
@@ -1315,3 +1321,9 @@ Write-Host '6. Review PATH preview, then run migrate.ps1 -FixPath.'
 Write-Host '7. Run migrate.ps1 -ApplyGitConfig.'
 Write-Host '8. Run migrate.ps1 -ShowProfileSnippet, then migrate.ps1 -AppendProfileSnippet if acceptable.'
 Write-Host '9. Close all terminals, reopen Windows Terminal, verify commands and visual style.'
+
+if ($script:Summary['Failed'].Count -gt 0) {
+    exit 2
+}
+
+exit 0

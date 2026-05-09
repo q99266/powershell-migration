@@ -31,6 +31,18 @@ function Invoke-MigratePhase {
     return $true
 }
 
+function Invoke-RequiredMigratePhase {
+    param(
+        [string]$Name,
+        [string[]]$Arguments
+    )
+
+    if (-not (Invoke-MigratePhase -Name $Name -Arguments $Arguments)) {
+        Write-Host "[STOP] Stopping one-click sequence at phase: $Name" -ForegroundColor Red
+        exit 1
+    }
+}
+
 if (-not (Test-Path -LiteralPath $MigrateScript)) {
     Write-Host "[ERR] migrate.ps1 not found: $MigrateScript" -ForegroundColor Red
     exit 1
@@ -50,7 +62,16 @@ if (-not $pwsh -or $PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host '[BOOTSTRAP] Running migrate.ps1 -Install from the current host. This phase installs PowerShell 7 and then stops.' -ForegroundColor Yellow
 
     & powershell -NoProfile -ExecutionPolicy Bypass -File $MigrateScript -TestSyntax
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[STOP] Syntax preflight failed during bootstrap. exit=$LASTEXITCODE" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+
     & powershell -NoProfile -ExecutionPolicy Bypass -File $MigrateScript -Install @mirrorArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[STOP] PowerShell 7 bootstrap install phase failed. exit=$LASTEXITCODE" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
 
     Write-Host ''
     Write-Host '[STOP] Open a new PowerShell 7 window, then run this script again:' -ForegroundColor Yellow
@@ -58,27 +79,27 @@ if (-not $pwsh -or $PSVersionTable.PSVersion.Major -lt 7) {
     exit 0
 }
 
-[void](Invoke-MigratePhase -Name 'Syntax preflight' -Arguments @('-TestSyntax'))
+Invoke-RequiredMigratePhase -Name 'Syntax preflight' -Arguments @('-TestSyntax')
 
 if (-not $SkipTerminalSetup) {
-    [void](Invoke-MigratePhase -Name 'Bundled terminal-setup base beautification' -Arguments (@('-RunTerminalSetup') + $mirrorArgs))
+    Invoke-RequiredMigratePhase -Name 'Bundled terminal-setup base beautification' -Arguments (@('-RunTerminalSetup') + $mirrorArgs)
 } else {
     Write-Host ''
     Write-Host '== Bundled terminal-setup base beautification ==' -ForegroundColor Cyan
     Write-Host '[SKIP] SkipTerminalSetup was specified.' -ForegroundColor Yellow
 }
 
-[void](Invoke-MigratePhase -Name 'Dry-run audit before install' -Arguments @())
-[void](Invoke-MigratePhase -Name 'Install missing tools and runtime managers' -Arguments (@('-Install') + $mirrorArgs))
-[void](Invoke-MigratePhase -Name 'Set Windows Terminal default profile to PowerShell 7' -Arguments @('-SetWindowsTerminalDefaultPwsh'))
-[void](Invoke-MigratePhase -Name 'Install Nerd Font and set Windows Terminal font' -Arguments (@('-InstallNerdFont','-SetWindowsTerminalFont') + $mirrorArgs))
-[void](Invoke-MigratePhase -Name 'Persist User PATH ordering' -Arguments @('-FixPath'))
-[void](Invoke-MigratePhase -Name 'Apply Git delta config' -Arguments @('-ApplyGitConfig'))
+Invoke-RequiredMigratePhase -Name 'Dry-run audit before install' -Arguments @()
+Invoke-RequiredMigratePhase -Name 'Install missing tools and runtime managers' -Arguments (@('-Install') + $mirrorArgs)
+Invoke-RequiredMigratePhase -Name 'Set Windows Terminal default profile to PowerShell 7' -Arguments @('-SetWindowsTerminalDefaultPwsh')
+Invoke-RequiredMigratePhase -Name 'Install Nerd Font and set Windows Terminal font' -Arguments (@('-InstallNerdFont','-SetWindowsTerminalFont') + $mirrorArgs)
+Invoke-RequiredMigratePhase -Name 'Persist User PATH ordering' -Arguments @('-FixPath')
+Invoke-RequiredMigratePhase -Name 'Apply Git delta config' -Arguments @('-ApplyGitConfig')
 
 if (-not $SkipProfileSnippet) {
     $profileArgs = @('-AppendProfileSnippet')
     if ($AcceptProfileCommandOverrides) { $profileArgs += '-AcceptProfileCommandOverrides' }
-    [void](Invoke-MigratePhase -Name 'Append PowerShell profile migration snippet' -Arguments $profileArgs)
+    Invoke-RequiredMigratePhase -Name 'Append PowerShell profile migration snippet' -Arguments $profileArgs
 } else {
     Write-Host ''
     Write-Host '== Append PowerShell profile migration snippet ==' -ForegroundColor Cyan
@@ -86,7 +107,7 @@ if (-not $SkipProfileSnippet) {
 }
 
 if (-not $NoFinalAudit) {
-    [void](Invoke-MigratePhase -Name 'Final dry-run audit' -Arguments @())
+    Invoke-RequiredMigratePhase -Name 'Final dry-run audit' -Arguments @()
 }
 
 Write-Host ''
