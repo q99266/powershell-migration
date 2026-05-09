@@ -148,13 +148,21 @@ function Test-ModuleAvailableCompat {
 
 function Get-NpmGlobalPackageMap {
     if (-not (Test-CommandExists npm)) {
-        return @{}
+        return [pscustomobject]@{
+            Succeeded = $false
+            Packages = @{}
+            Error = 'npm is missing'
+        }
     }
 
     try {
         $json = (& npm list -g --depth=0 --json 2>$null) -join [Environment]::NewLine
         if ([string]::IsNullOrWhiteSpace($json)) {
-            return @{}
+            return [pscustomobject]@{
+                Succeeded = $false
+                Packages = @{}
+                Error = 'npm list returned empty output'
+            }
         }
 
         $parsed = $json | ConvertFrom-Json
@@ -164,11 +172,17 @@ function Get-NpmGlobalPackageMap {
                 $map[$_.Name] = $_.Value.version
             }
         }
-        return $map
+        return [pscustomobject]@{
+            Succeeded = $true
+            Packages = $map
+            Error = $null
+        }
     } catch {
-        Write-Host "[WARN] Failed to inspect npm global packages: $($_.Exception.Message)" -ForegroundColor Yellow
-        Add-Summary Manual 'npm global package inspection failed; review manually'
-        return @{}
+        return [pscustomobject]@{
+            Succeeded = $false
+            Packages = @{}
+            Error = $_.Exception.Message
+        }
     }
 }
 
@@ -414,14 +428,21 @@ foreach ($module in $MigrationConfig.PowerShellModules) {
 
 Write-Section 'npm global packages'
 if (Test-CommandExists npm) {
-    $npmGlobal = Get-NpmGlobalPackageMap
-    foreach ($pkg in $MigrationConfig.NpmGlobalPackages) {
-        if ($npmGlobal.ContainsKey($pkg)) {
-            Write-Host "[OK] npm global package $pkg@$($npmGlobal[$pkg])"
-            Add-Summary Ok "npm global package $pkg"
-        } else {
-            [void](Invoke-Native -FilePath 'npm' -Arguments @('install','-g',$pkg) -Label "Install missing npm global package $pkg" -ShouldRun:$Install)
-            if (-not $Install) { Add-Summary Missing "npm global package $pkg" }
+    $npmInspection = Get-NpmGlobalPackageMap
+    if (-not $npmInspection.Succeeded) {
+        Write-Host "[WARN] Failed to inspect npm global packages: $($npmInspection.Error)" -ForegroundColor Yellow
+        Write-Host '[WARN] Skipping npm global package installation to avoid accidental mass upgrades.' -ForegroundColor Yellow
+        Add-Summary Manual 'npm global package inspection failed; skipped npm install stage'
+    } else {
+        $npmGlobal = $npmInspection.Packages
+        foreach ($pkg in $MigrationConfig.NpmGlobalPackages) {
+            if ($npmGlobal.ContainsKey($pkg)) {
+                Write-Host "[OK] npm global package $pkg@$($npmGlobal[$pkg])"
+                Add-Summary Ok "npm global package $pkg"
+            } else {
+                [void](Invoke-Native -FilePath 'npm' -Arguments @('install','-g',$pkg) -Label "Install missing npm global package $pkg" -ShouldRun:$Install)
+                if (-not $Install) { Add-Summary Missing "npm global package $pkg" }
+            }
         }
     }
 } else {
