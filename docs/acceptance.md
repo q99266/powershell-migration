@@ -10,7 +10,7 @@
 pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
 ```
 
-确认 `config.ps1` 的路径适配当前机器后，再执行：
+如果新电脑使用默认 D 盘布局，可以直接执行；只有改过工具目录或没有 D 盘时，才需要先调整 `config.ps1`。
 
 执行：
 

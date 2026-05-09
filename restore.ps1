@@ -808,6 +808,12 @@ Write-Host "SetWindowsTerminalFont: $SetWindowsTerminalFont"
 Write-Host "UseChinaMirrors: $UseChinaMirrors"
 Write-Host 'Default mode audits only.'
 Write-Host 'Run with -TestSyntax first on a new machine if profile/script parsing looks suspicious.'
+if (Test-Path -LiteralPath 'D:\') {
+    Write-Host 'Path layout: using default D: drive layout from config.ps1.'
+} else {
+    Write-Host '[WARN] D: drive not found. Review config.ps1 before installing or fixing PATH.' -ForegroundColor Yellow
+    Add-Summary Manual 'D: drive missing; review config.ps1 path layout'
+}
 if ($UseChinaMirrors) {
     Write-Host "NPM registry override: $($MigrationConfig.NpmChinaMirror)"
     Write-Host 'NPM install fallback order: npmmirror first, then configured/default registry.'

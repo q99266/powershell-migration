@@ -1,6 +1,6 @@
 # PowerShell Migration
 
-这是个人 Windows + PowerShell 7 终端环境迁移方案。默认配置绑定作者当前机器路径；迁移到新电脑前，先检查并按需修改 `config.ps1`。
+这是个人 Windows + PowerShell 7 终端环境迁移方案。默认按 `D:\tools`、`D:\work`、`D:\codexwork` 这套布局恢复；新电脑有 D 盘时不需要先改 `config.ps1`。
 
 总入口只有一个：
 
@@ -35,7 +35,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 推荐顺序
 
-0. 新电脑先打开 `config.ps1`，确认 `ProjectRoot`、`ToolsRoot`、`TerminalSetupRoot`、`ThemePath`、PATH 优先级等路径是否符合新机器。
+0. 默认直接使用 D 盘布局。只有新电脑没有 D 盘、你想改工具目录、或 `terminal-setup` 不在默认路径时，才需要先改 `config.ps1`。
 1. 新电脑先跑语法自检：
    ```powershell
    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
@@ -64,7 +64,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 ## 迁移边界
 
-本项目不是通用装机脚本。它以 `config.ps1` 为配置入口，默认路径适配作者当前机器。
+本项目不是通用装机脚本。它默认按作者的 D 盘布局恢复环境；`config.ps1` 是可选配置入口，不是每次迁移前都必须改。
 
 Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
 
