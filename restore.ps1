@@ -238,23 +238,31 @@ function Set-UserPathFromPlan {
 function Get-ProfileAppendSnippet {
     if ($AcceptProfileCommandOverrides) {
         $commandBlock = @'
-function cat { bat @args }
-function grep { rg @args }
+if (Get-Command bat -ErrorAction SilentlyContinue) {
+    function cat { bat @args }
+}
+if (Get-Command rg -ErrorAction SilentlyContinue) {
+    function grep { rg @args }
+}
 '@
     } else {
         $commandBlock = @'
-function batcat { bat @args }
-function rgrep { rg @args }
+if (Get-Command bat -ErrorAction SilentlyContinue) {
+    function batcat { bat @args }
+}
+if (Get-Command rg -ErrorAction SilentlyContinue) {
+    function rgrep { rg @args }
+}
 '@
     }
 
-@'
+    $beforeCommandBlock = @'
 # >>> powershell-migration extras >>>
 # terminal-setup owns: oh-my-posh, PSReadLine, Terminal-Icons, z, Windows Terminal look.
 # This block adds only migration extras and is safe to append once.
 
-`$script:IsInteractiveConsole = `$Host.Name -eq 'ConsoleHost' -and -not [Console]::IsOutputRedirected
-if (`$script:IsInteractiveConsole) {
+$script:IsInteractiveConsole = $Host.Name -eq 'ConsoleHost' -and -not [Console]::IsOutputRedirected
+if ($script:IsInteractiveConsole) {
     Import-Module PSFzf -ErrorAction SilentlyContinue
     if (Get-Module PSFzf) {
         Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r' -ErrorAction SilentlyContinue
@@ -265,17 +273,33 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     Invoke-Expression ((zoxide init powershell) -join [Environment]::NewLine)
 }
 
-`$env:FZF_DEFAULT_COMMAND = 'fd --type f --hidden --follow --exclude .git'
-`$env:FZF_CTRL_T_COMMAND = `$env:FZF_DEFAULT_COMMAND
-`$env:FZF_DEFAULT_OPTS = "--height 70% --layout=reverse --border --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+if (Get-Command fd -ErrorAction SilentlyContinue) {
+    $env:FZF_DEFAULT_COMMAND = 'fd --type f --hidden --follow --exclude .git'
+    $env:FZF_CTRL_T_COMMAND = $env:FZF_DEFAULT_COMMAND
+}
+if ((Get-Command fzf -ErrorAction SilentlyContinue) -and (Get-Command bat -ErrorAction SilentlyContinue)) {
+    $env:FZF_DEFAULT_OPTS = "--height 70% --layout=reverse --border --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+} elseif (Get-Command fzf -ErrorAction SilentlyContinue) {
+    $env:FZF_DEFAULT_OPTS = "--height 70% --layout=reverse --border"
+}
 
-$commandBlock
-function lg { lazygit @args }
-function ff { fd --type f @args }
-function ffd { fd --type d @args }
-function es1 { es.exe -instance 1.5a @args }
+'@
+
+    $afterCommandBlock = @'
+if (Get-Command lazygit -ErrorAction SilentlyContinue) {
+    function lg { lazygit @args }
+}
+if (Get-Command fd -ErrorAction SilentlyContinue) {
+    function ff { fd --type f @args }
+    function ffd { fd --type d @args }
+}
+if (Get-Command es.exe -ErrorAction SilentlyContinue) {
+    function es1 { es.exe -instance 1.5a @args }
+}
 # <<< powershell-migration extras <<<
-'@ -replace '\$commandBlock', $commandBlock
+'@
+
+    return ($beforeCommandBlock, $commandBlock, $afterCommandBlock) -join [Environment]::NewLine
 }
 
 function Add-ProfileSnippet {
@@ -309,6 +333,11 @@ function Add-ProfileSnippet {
     Add-Content -LiteralPath $profilePath -Value "`r`n$snippet`r`n" -Encoding utf8
     Write-Host "[OK] Profile snippet appended: $profilePath" -ForegroundColor Green
     Add-Summary Changed "Profile snippet appended"
+}
+
+if ($ShowProfileSnippet) {
+    Get-ProfileAppendSnippet
+    return
 }
 
 Write-Section 'Mode'
@@ -461,9 +490,7 @@ if ($javaCommandSources.ContainsKey('java') -and $javaCommandSources['java'] -ma
 }
 
 Write-Section 'Profile append'
-if ($ShowProfileSnippet) {
-    Get-ProfileAppendSnippet
-} elseif ($AppendProfileSnippet) {
+if ($AppendProfileSnippet) {
     Add-ProfileSnippet
 } else {
     Write-Host 'Run with -ShowProfileSnippet to inspect append-only profile block.'
