@@ -65,7 +65,7 @@ D:\codexwork\powershell-migration\backups
 }
 ```
 
-`defaultProfile` 使用 PowerShell 7 的 Windows Terminal fallback GUID。后续运行 `migrate.ps1 -SetWindowsTerminalDefaultPwsh` 时会备份并更新同一个 `settings.json`。
+最小配置里的 `defaultProfile` 使用 PowerShell 7 的 Windows Terminal fallback GUID，只用于 bootstrap。后续运行 `migrate.ps1 -SetWindowsTerminalDefaultPwsh` 时，脚本会优先从 `profiles.list` 找真实 PowerShell 7 profile；只有真实 profile 已生成并可验证时，才会备份并更新同一个 `settings.json`。如果只有 fallback GUID，脚本会提示先打开一次 Windows Terminal 或重新审计。
 
 ## 字体
 

@@ -63,6 +63,28 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 9. 查看 `migrate.ps1 -ShowProfileSnippet`，确认后运行 `migrate.ps1 -AppendProfileSnippet`。
 10. 关闭所有终端，重新打开 Windows Terminal 验收。
 
+## 封版原则
+
+封版后只做三类维护：
+
+- 修 bug。
+- 补文档。
+- 调整个人路径或版本号。
+
+不要继续扩展新的语言管理器、终端主题系统或下载镜像策略。这个仓库的定位是恢复个人 PowerShell / Windows Terminal 日常体验，不是继续长成全语言装机平台。
+
+## 真实演练清单
+
+封版前按下面顺序做最后演练：
+
+1. 无修改 dry-run：`migrate.ps1` 默认审计应不产生持久化改动。
+2. Bootstrap 流程：在没有 `pwsh` 的新机上，用 Windows PowerShell 运行 `migrate.ps1 -Install`，脚本应只安装 PowerShell 7 并提示重开 `pwsh`。
+3. 完整安装流程：重开 PowerShell 7 后运行 `migrate.ps1 -Install`，安装缺失 CLI、Windows Terminal、运行时管理器和模块。
+4. 样式流程：运行 `migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont`，必要时再运行 `migrate.ps1 -SetWindowsTerminalDefaultPwsh`。
+5. 持久化流程：审计 PATH 后运行 `migrate.ps1 -FixPath`，再运行 `migrate.ps1 -ApplyGitConfig` 和 `migrate.ps1 -AppendProfileSnippet`。
+6. 重开 Windows Terminal 后执行 `docs/acceptance.md`。
+7. 重启电脑后再次执行 `docs/acceptance.md`。
+
 ## 迁移边界
 
 本项目不是通用装机脚本，也不是企业级无交互装机器。它是面向个人环境的高质量半自动恢复器：默认按作者的 D 盘布局恢复终端体验，尽量把可自动化的安装、PATH、profile、字体和 Git 配置做掉；遇到 Windows Terminal 动态 profile、winget 安装器刷新、具体 Python/JDK 版本选择这类环境相关点，会审计、提示并要求复跑或人工确认。`config.ps1` 是集中配置入口，不是每次迁移前都必须改，但也不能只看“有 D 盘”就跳过。
