@@ -7,7 +7,7 @@
 先执行语法自检：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
 ```
 
 确认 `config.ps1` 的路径适配当前机器后，再执行：

@@ -43,6 +43,7 @@ function Test-ScriptSyntax {
 
 if ($TestSyntax) {
     $syntaxFiles = @(
+        (Join-Path $ScriptRoot 'migrate.ps1'),
         (Join-Path $ScriptRoot 'config.ps1'),
         (Join-Path $ScriptRoot 'restore.ps1'),
         (Join-Path $ScriptRoot 'restore-terminal-combined.ps1'),
@@ -593,7 +594,7 @@ function Ensure-WindowsTerminalBaseline {
     } else {
         Write-Host "[WARN] Windows Terminal settings.json not found: $settingsPath" -ForegroundColor Yellow
         Write-Host 'Run with -Install to install Windows Terminal and create a minimal settings.json.'
-        Add-Summary Manual 'Windows Terminal settings.json missing; run restore.ps1 -Install'
+        Add-Summary Manual 'Windows Terminal settings.json missing; run migrate.ps1 -Install'
     }
 }
 
@@ -816,7 +817,8 @@ if ($UseChinaMirrors) {
 }
 
 Write-Section 'Official entry'
-Write-Host 'Formal script: restore.ps1'
+Write-Host 'Formal entry script: migrate.ps1'
+Write-Host 'Internal restore implementation: restore.ps1'
 Write-Host 'Legacy scripts: restore-terminal-combined.ps1, restore-draft.ps1'
 
 Write-Section 'Terminal setup boundary'
@@ -852,7 +854,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     $requiresPwshRerun = $true
 }
 if ($Install -and $requiresPwshRerun) {
-    Write-Host '[STOP] Bootstrap phase complete or required. Open a new PowerShell 7 (pwsh) session and rerun restore.ps1 for modules/profile/tools.' -ForegroundColor Yellow
+    Write-Host '[STOP] Bootstrap phase complete or required. Open a new PowerShell 7 (pwsh) session and rerun migrate.ps1 for modules/profile/tools.' -ForegroundColor Yellow
     Add-Summary Manual 'Rerun from a new PowerShell 7 session before continuing'
     Write-Section 'Summary'
     foreach ($kind in $script:Summary.Keys) {
@@ -1049,11 +1051,11 @@ foreach ($kind in $script:Summary.Keys) {
 
 Write-Section 'Recommended order'
 Write-Host '1. Run terminal-setup for base beautification.'
-Write-Host '2. Run restore.ps1 without switches.'
-Write-Host '3. Review package output, then run restore.ps1 -Install if needed.'
-Write-Host '4. If needed, run restore.ps1 -SetWindowsTerminalDefaultPwsh.'
-Write-Host '5. Run restore.ps1 -InstallNerdFont -SetWindowsTerminalFont if needed.'
-Write-Host '6. Review PATH preview, then run restore.ps1 -FixPath.'
-Write-Host '7. Run restore.ps1 -ApplyGitConfig.'
-Write-Host '8. Run restore.ps1 -ShowProfileSnippet, then restore.ps1 -AppendProfileSnippet if acceptable.'
+Write-Host '2. Run migrate.ps1 without switches.'
+Write-Host '3. Review package output, then run migrate.ps1 -Install if needed.'
+Write-Host '4. If needed, run migrate.ps1 -SetWindowsTerminalDefaultPwsh.'
+Write-Host '5. Run migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont if needed.'
+Write-Host '6. Review PATH preview, then run migrate.ps1 -FixPath.'
+Write-Host '7. Run migrate.ps1 -ApplyGitConfig.'
+Write-Host '8. Run migrate.ps1 -ShowProfileSnippet, then migrate.ps1 -AppendProfileSnippet if acceptable.'
 Write-Host '9. Close all terminals, reopen Windows Terminal, verify commands and visual style.'

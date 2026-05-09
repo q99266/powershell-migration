@@ -2,13 +2,13 @@
 
 这是个人 Windows + PowerShell 7 终端环境迁移方案。默认配置绑定作者当前机器路径；迁移到新电脑前，先检查并按需修改 `config.ps1`。
 
-正式入口只有一个：
+总入口只有一个：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
 ```
 
-`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考，不再作为正式入口。
+`migrate.ps1` 会先做语法预检，再调用内部实现 `restore.ps1`。日常迁移只跑 `migrate.ps1`；`restore.ps1` 是内部实现，不作为用户入口。`restore-draft.ps1` 和 `restore-terminal-combined.ps1` 是历史脚本，保留作参考。
 
 ## 职责边界
 
@@ -38,28 +38,28 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 0. 新电脑先打开 `config.ps1`，确认 `ProjectRoot`、`ToolsRoot`、`TerminalSetupRoot`、`ThemePath`、PATH 优先级等路径是否符合新机器。
 1. 新电脑先跑语法自检：
    ```powershell
-   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
    ```
    如果 `pwsh` 还没有安装，先用 Windows PowerShell 跑：
    ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
-   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
    ```
    该流程只做 bootstrap：安装 `Microsoft.PowerShell` 后会停止后续阶段。安装完成后必须重新打开 PowerShell 7，再继续执行本脚本。
 2. 先运行 `terminal-setup` 完成基础美化。
-3. 运行 `restore.ps1` 做 dry-run 审计。
-4. 确认缺失工具后运行 `restore.ps1 -Install`。这一步也会安装 Windows Terminal，并在缺失时创建最小 `settings.json`。
+3. 运行 `migrate.ps1` 做 dry-run 审计。
+4. 确认缺失工具后运行 `migrate.ps1 -Install`。这一步也会安装 Windows Terminal，并在缺失时创建最小 `settings.json`。
 5. 如果 Windows Terminal 默认 profile 不是 PowerShell 7，确认后运行：
    ```powershell
-   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -SetWindowsTerminalDefaultPwsh
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -SetWindowsTerminalDefaultPwsh
    ```
 6. 安装 Nerd Font 并设置 Windows Terminal 默认字体：
    ```powershell
-   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -InstallNerdFont -SetWindowsTerminalFont
+   pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont
    ```
-7. 确认 PATH 预览后运行 `restore.ps1 -FixPath`。
-8. 运行 `restore.ps1 -ApplyGitConfig`。
-9. 查看 `restore.ps1 -ShowProfileSnippet`，确认后运行 `restore.ps1 -AppendProfileSnippet`。
+7. 确认 PATH 预览后运行 `migrate.ps1 -FixPath`。
+8. 运行 `migrate.ps1 -ApplyGitConfig`。
+9. 查看 `migrate.ps1 -ShowProfileSnippet`，确认后运行 `migrate.ps1 -AppendProfileSnippet`。
 10. 关闭所有终端，重新打开 Windows Terminal 验收。
 
 ## 迁移边界
@@ -68,9 +68,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\
 
 Java 当前只有审计能力：脚本会报告 `JAVA_HOME`、`java`、`javac` 的解析状态，但不会设置 `JAVA_HOME`，也不会把 `JavaBinPath` 写入 PATH。若后续要做 Java 迁移，需要先确定固定 JDK 目录或版本管理方案。
 
-Windows Terminal 现在属于 baseline：脚本会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7，并预写 Nerd Font 默认字体。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
+Windows Terminal 现在属于 baseline：总入口会检测 `wt` 命令和 `settings.json`。传入 `-Install` 时，如果 Windows Terminal 缺失，会通过 winget 安装 `Microsoft.WindowsTerminal`；如果 `settings.json` 尚未生成，会创建一个最小配置，默认 profile 指向 PowerShell 7，并预写 Nerd Font 默认字体。默认 shell 修改仍然只有传入 `-SetWindowsTerminalDefaultPwsh` 才会备份并持久化。
 
-PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`restore.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
+PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，`migrate.ps1 -Install` 只安装 PowerShell 7 并停止，避免同一轮继续调用尚未出现在当前进程 PATH 中的 `pwsh`。
 
 下载源策略：
 
@@ -86,37 +86,37 @@ PowerShell 7 安装采用两阶段策略：如果当前机器还没有 `pwsh`，
 优先使用：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
 ```
 
 如果 `pwsh` 还没安装，先用 Windows PowerShell 做解析检查：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -TestSyntax
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -TestSyntax
 ```
 
 安装 PowerShell 7：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install
 ```
 
 安装完成后打开新的 PowerShell 7：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1
 ```
 
 国内 npm 网络较慢时：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -Install -UseChinaMirrors
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -Install -UseChinaMirrors
 ```
 
 国内 GitHub 字体下载较慢时，脚本会自动尝试内置加速源；你也可以显式让加速源优先：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\restore.ps1 -InstallNerdFont -SetWindowsTerminalFont -UseChinaMirrors
+pwsh -NoProfile -ExecutionPolicy Bypass -File D:\codexwork\powershell-migration\migrate.ps1 -InstallNerdFont -SetWindowsTerminalFont -UseChinaMirrors
 ```
 
 常见原因：
